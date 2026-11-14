@@ -58,6 +58,14 @@ h3 { font-size: 16px; }
 }
 .login-hint { font-size: 12px; color: var(--abu); margin-top: 14px; }
 
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+.auth-tab { border: 1px solid var(--garis); border-radius: 8px; padding: 10px; background: #fff; color: var(--hijau); font-weight: 600; cursor: pointer; }
+.auth-tab.active { background: var(--hijau); border-color: var(--hijau); color: #fff; }
+.form-message { font-size: 13px; margin: 0; color: var(--hijau); line-height: 1.45; }
+.form-message.error { color: var(--merah); }
+#register-form { max-height: 58vh; overflow-y: auto; padding-right: 3px; }
+
+
 /* ===== Shell ===== */
 #app { display: flex; min-height: 100vh; }
 
