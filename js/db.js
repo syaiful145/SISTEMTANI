@@ -1,6 +1,6 @@
 /* ===== AgriCore: penyimpanan Supabase ===== */
 const SUPABASE_URL = 'https://bhbkvsgvogdsfvqqzcpy.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_FvUHbnX5iM5ifvvalo5oA_ap1E6QoN';
+const SUPABASE_KEY = 'sb_publishable_FvWUHbnX5iM5ifvvalo5oA_ap1E6QoN';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TABLES = {
