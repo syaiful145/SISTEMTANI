@@ -38,18 +38,34 @@ const tabel = (kolom, baris, kosong = 'Belum ada data.') => {
 };
 
 /* ===== Sesi & hak akses ===== */
-const SESI_KEY = 'sp-sesi';
+let ACTIVE_USER = null;
 
-function me() {
-  const s = JSON.parse(localStorage.getItem(SESI_KEY) || 'null');
-  if (!s) return null;
-  if (s.tipe === 'admin') return { tipe: 'admin', key: 'admin', nama: 'Administrator', akses: Object.keys(AKSES) };
-  const p = DB.get('pegawai', s.id);
-  return p ? { tipe: 'pegawai', key: 'p' + p.id, nama: p.nama, id: p.id, akses: p.akses || [] } : null;
+function me() { return ACTIVE_USER; }
+
+async function muatPenggunaAuth(user) {
+  if (!user) { ACTIVE_USER = null; return null; }
+  const { data: profil, error: profilError } = await supabaseClient
+    .from('profiles').select('id,nama,role,pegawai_id').eq('id', user.id).maybeSingle();
+  if (profilError) throw profilError;
+  if (!profil) throw new Error('Profil akun tidak ditemukan. Hubungi administrator.');
+  if (profil.role === 'admin') {
+    ACTIVE_USER = { tipe: 'admin', key: 'admin', nama: profil.nama || 'Administrator', akses: Object.keys(AKSES), authId: user.id };
+    return ACTIVE_USER;
+  }
+  const { data: pegawai, error: pegawaiError } = await supabaseClient
+    .from('pegawai').select('id,nama,akses,status_verifikasi,alasan_penolakan').eq('auth_user_id', user.id).maybeSingle();
+  if (pegawaiError) throw pegawaiError;
+  if (!pegawai) throw new Error('Data pegawai tidak ditemukan. Hubungi administrator.');
+  if (pegawai.status_verifikasi !== 'disetujui') {
+    const alasan = pegawai.status_verifikasi === 'ditolak' && pegawai.alasan_penolakan ? ` Alasan: ${pegawai.alasan_penolakan}` : '';
+    throw new Error(`Akun pegawai masih ${pegawai.status_verifikasi || 'menunggu'} verifikasi admin.${alasan}`);
+  }
+  ACTIVE_USER = { tipe: 'pegawai', key: 'p' + pegawai.id, nama: pegawai.nama, id: pegawai.id, akses: pegawai.akses || [], authId: user.id };
+  return ACTIVE_USER;
 }
 const isAdmin = () => me()?.tipe === 'admin';
 const bisa = fitur => { const u = me(); return !!u && (u.tipe === 'admin' || u.akses.includes(fitur)); };
-const catat = (aksi, entitas) => { const u = me(); DB.log(u ? u.key : 'sistem', u ? u.nama : 'Sistem', aksi, entitas); };
+const catat = (aksi, entitas) => { const u = me(); return DB.log(u ? u.key : 'sistem', u ? u.nama : 'Sistem', aksi, entitas); };
 
 /* ===== Menu ===== */
 const MENU = [
@@ -186,7 +202,7 @@ function openModal(judul, fields, nilai, onSave) {
     e.preventDefault();
     try {
       const data = await bacaForm($('#mform'), fields, nilai);
-      const err = onSave(data);
+      const err = await onSave(data);
       if (err) { $('#merr').textContent = err; return; }
       tutupModal();
       render();
@@ -229,12 +245,12 @@ function crud(tbl, cfg) {
 function openCrud(tbl, id) {
   const cfg = CFG[tbl];
   const lama = id ? DB.get(tbl, id) : {};
-  openModal(`${id ? 'Ubah' : 'Tambah'} ${cfg.judul}`, cfg.fields(!!id), lama, data => {
+  openModal(`${id ? 'Ubah' : 'Tambah'} ${cfg.judul}`, cfg.fields(!!id), lama, async data => {
     if (cfg.olah) cfg.olah(data, lama);
     const err = cfg.validasi ? cfg.validasi(data, lama, id) : null;
     if (err) return err;
-    if (id) DB.update(tbl, id, data); else DB.add(tbl, data);
-    catat(`${id ? 'Ubah' : 'Tambah'} ${cfg.judul}`, cfg.nama({ ...lama, ...data }));
+    if (id) await DB.update(tbl, id, data); else await DB.add(tbl, data);
+    await catat(`${id ? 'Ubah' : 'Tambah'} ${cfg.judul}`, cfg.nama({ ...lama, ...data }));
     return null;
   });
 }
@@ -393,15 +409,15 @@ function openTransaksi() {
       options: () => DB.all('penanaman').map(p => [p.id, penanamanLabel(p)]) },
     { name: 'keterangan', label: 'Keterangan', full: true }
   ];
-  openModal('Catat Transaksi Stok', fields, { jenis: 'Keluar', tanggal: hariIni() }, data => {
+  openModal('Catat Transaksi Stok', fields, { jenis: 'Keluar', tanggal: hariIni() }, async data => {
     const b = DB.get('barang', data.barangId);
     if (!b) return 'Barang tidak ditemukan.';
     if (!(data.jumlah > 0)) return 'Jumlah harus lebih dari 0.';
     const stokBaru = data.jenis === 'Masuk' ? b.stok + data.jumlah : b.stok - data.jumlah;
     if (stokBaru < 0) return `Stok tidak cukup. Sisa ${rp(b.stok)} ${b.satuan}.`;
-    DB.update('barang', b.id, data.jenis === 'Masuk' ? { stok: stokBaru, tanggalMasuk: data.tanggal } : { stok: stokBaru });
-    DB.add('transaksi', { ...data, penanamanId: data.penanamanId || null });
-    catat(`Transaksi stok ${data.jenis}`, `${b.nama} ${rp(data.jumlah)} ${b.satuan}`);
+    await DB.update('barang', b.id, data.jenis === 'Masuk' ? { stok: stokBaru, tanggalMasuk: data.tanggal } : { stok: stokBaru });
+    await DB.add('transaksi', { ...data, penanamanId: data.penanamanId || null });
+    await catat(`Transaksi stok ${data.jenis}`, `${b.nama} ${rp(data.jumlah)} ${b.satuan}`);
     return null;
   });
 }
@@ -414,9 +430,9 @@ function openLapor() {
     { name: 'jenis', label: 'Jenis kegiatan', type: 'select', options: JENIS_KEGIATAN, req: true },
     { name: 'lokasi', label: 'Lokasi lahan', req: true },
     { name: 'deskripsi', label: 'Deskripsi kegiatan', type: 'textarea', req: true, full: true }
-  ], {}, data => {
-    DB.add('laporan', { pegawaiId: u.id, ...data, dibaca: false });
-    catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
+  ], {}, async data => {
+    await DB.add('laporan', { pegawaiId: u.id, ...data, dibaca: false });
+    await catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
     return null;
   });
 }
@@ -553,7 +569,7 @@ function pageAktivitas() {
           tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc(l.lokasi), esc(l.deskripsi),
           l.dibaca ? '<span class="muted">Dibaca</span>' : '<span class="tag green">Baru</span>'
         ]), 'Belum ada laporan dari pegawai.'),
-    after: () => { DB.all('laporan').forEach(l => (l.dibaca = true)); DB.simpan(); }
+    after: () => { DB.all('laporan').forEach(l => { DB.update('laporan', l.id, { dibaca: true }).catch(e => console.error(e)); }); }
   };
 }
 
@@ -568,7 +584,7 @@ function pageNotifikasi() {
           <span class="tag">${esc(n.jenis)}</span>
         </div>`).join('')}</div>`
     : '<div class="empty">Tidak ada notifikasi. Semua berjalan normal.</div>');
-  return { html, after: () => { DB.all('laporan').forEach(l => (l.dibaca = true)); DB.simpan(); } };
+  return { html, after: () => { DB.all('laporan').forEach(l => { DB.update('laporan', l.id, { dibaca: true }).catch(e => console.error(e)); }); } };
 }
 
 /* ----- Laporan ----- */
@@ -802,9 +818,8 @@ function aksiKlik(e) {
     case 'hapus': {
       const cfg = CFG[tbl], row = DB.get(tbl, id);
       if (!row || !confirm('Hapus data ini? Tindakan ini tidak bisa dibatalkan.')) return;
-      DB.remove(tbl, id);
-      catat(`Hapus ${cfg.judul}`, cfg.nama(row));
-      return render();
+      DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); render(); }).catch(err => alert(err.message));
+      return;
     }
     case 'riwayat': return riwayatPegawai(id);
     case 'transaksi': return openTransaksi();
@@ -816,23 +831,31 @@ function aksiKlik(e) {
   }
 }
 
-function login(e) {
+async function login(e) {
   e.preventDefault();
-  const u = $('#l-user').value.trim(), p = $('#l-pass').value;
-  let sesi = null;
-  const adm = DB.all('users').find(x => x.username === u && x.password === p);
-  if (adm) sesi = { tipe: 'admin', id: adm.id };
-  else {
-    const pg = DB.all('pegawai').find(x => x.username === u && x.password === p);
-    if (pg) sesi = { tipe: 'pegawai', id: pg.id };
+  const email = $('#l-user').value.trim(), password = $('#l-pass').value;
+  const errBox = $('#l-err');
+  const submit = $('#login-form button[type="submit"]');
+  errBox.textContent = '';
+  submit.disabled = true; submit.textContent = 'Memeriksa...';
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    try {
+      await muatPenggunaAuth(data.user);
+      await DB.init(isAdmin());
+    } catch (e) {
+      await supabaseClient.auth.signOut();
+      throw e;
+    }
+    $('#login-form').reset();
+    location.hash = '#dashboard';
+    render();
+  } catch (err) {
+    errBox.textContent = err.message || 'Login gagal. Periksa email dan password.';
+  } finally {
+    submit.disabled = false; submit.textContent = 'Masuk';
   }
-  if (!sesi) { $('#l-err').textContent = 'Username atau password salah.'; return; }
-  localStorage.setItem(SESI_KEY, JSON.stringify(sesi));
-  catat('Masuk ke sistem', '-');
-  $('#l-err').textContent = '';
-  $('#login-form').reset();
-  location.hash = '#dashboard';
-  render();
 }
 
 function setAuthMode(mode) {
@@ -889,15 +912,14 @@ async function daftarPegawai(e) {
   }
 }
 
-function init() {
-  DB.init();
+async function init() {
   $('#login-form').onsubmit = login;
   $('#register-form').onsubmit = daftarPegawai;
   $('#show-login').onclick = () => setAuthMode('login');
   $('#show-register').onclick = () => setAuthMode('register');
-  $('#logout').onclick = () => {
-    catat('Keluar dari sistem', '-');
-    localStorage.removeItem(SESI_KEY);
+  $('#logout').onclick = async () => {
+    try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); }
+    ACTIVE_USER = null;
     location.hash = '';
     render();
   };
@@ -914,6 +936,13 @@ function init() {
     render();
   });
   window.addEventListener('hashchange', render);
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      try { await muatPenggunaAuth(session.user); await DB.init(isAdmin()); }
+      catch (e) { await supabaseClient.auth.signOut(); ACTIVE_USER = null; $('#l-err').textContent = e.message; }
+    }
+  } catch (e) { console.error('Gagal memulihkan sesi Supabase:', e); }
   render();
 }
 
