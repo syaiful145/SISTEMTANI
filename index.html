@@ -12,14 +12,30 @@
   <section id="login-page">
     <div class="login-card">
       <h1>Sistem Pertanian</h1>
-      <p class="muted">Masuk untuk mengelola kegiatan lahan.</p>
-      <form id="login-form" autocomplete="off">
-        <input id="l-user" placeholder="Username" required>
-        <input id="l-pass" type="password" placeholder="Password" required>
-        <p id="l-err" class="form-error"></p>
+      <p class="muted">Silakan masuk atau daftarkan akun pegawai.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Pilihan akun">
+        <button type="button" class="auth-tab active" id="show-login">Login</button>
+        <button type="button" class="auth-tab" id="show-register">Daftar Pegawai</button>
+      </div>
+      <form id="login-form" autocomplete="on">
+        <input id="l-user" placeholder="Username" autocomplete="username" required>
+        <input id="l-pass" type="password" placeholder="Password" autocomplete="current-password" required>
+        <p id="l-err" class="form-error" role="alert"></p>
         <button class="btn" type="submit">Masuk</button>
       </form>
-      <p class="login-hint">Akun demo: admin / admin123 · budi / budi123 · siti / siti123</p>
+      <form id="register-form" class="hidden" autocomplete="on">
+        <input id="r-nama" placeholder="Nama lengkap" autocomplete="name" required>
+        <input id="r-id" placeholder="ID pegawai" required>
+        <input id="r-email" type="email" placeholder="Email aktif" autocomplete="email" required>
+        <input id="r-jabatan" placeholder="Jabatan" required>
+        <input id="r-telepon" type="tel" placeholder="Nomor telepon" autocomplete="tel" required>
+        <input id="r-alamat" placeholder="Alamat" autocomplete="street-address" required>
+        <input id="r-pass" type="password" placeholder="Buat password (minimal 8 karakter)" autocomplete="new-password" minlength="8" required>
+        <input id="r-pass2" type="password" placeholder="Ulangi password" autocomplete="new-password" minlength="8" required>
+        <p id="r-msg" class="form-message" role="status"></p>
+        <button class="btn" type="submit">Kirim Pendaftaran</button>
+      </form>
+      <p class="login-hint" id="login-hint">Akun demo lokal: admin / admin123 · budi / budi123 · siti / siti123</p>
     </div>
   </section>
 
