@@ -835,9 +835,66 @@ function login(e) {
   render();
 }
 
+function setAuthMode(mode) {
+  const isRegister = mode === 'register';
+  $('#login-form').classList.toggle('hidden', isRegister);
+  $('#register-form').classList.toggle('hidden', !isRegister);
+  $('#login-hint').classList.toggle('hidden', isRegister);
+  $('#show-login').classList.toggle('active', !isRegister);
+  $('#show-register').classList.toggle('active', isRegister);
+  $('#l-err').textContent = '';
+  $('#r-msg').textContent = '';
+  $('#r-msg').classList.remove('error');
+}
+
+async function daftarPegawai(e) {
+  e.preventDefault();
+  const nama = $('#r-nama').value.trim();
+  const idPegawai = $('#r-id').value.trim();
+  const email = $('#r-email').value.trim();
+  const jabatan = $('#r-jabatan').value.trim();
+  const telepon = $('#r-telepon').value.trim();
+  const alamat = $('#r-alamat').value.trim();
+  const password = $('#r-pass').value;
+  const ulangi = $('#r-pass2').value;
+  const msg = $('#r-msg');
+  msg.classList.remove('error');
+  if (password !== ulangi) {
+    msg.textContent = 'Konfirmasi password tidak sama.';
+    msg.classList.add('error');
+    return;
+  }
+  const submit = $('#register-form button[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = 'Mengirim...';
+  msg.textContent = 'Sedang mengirim pendaftaran...';
+  try {
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: { data: { nama, id_pegawai: idPegawai, jabatan, telepon, alamat } }
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error('Pendaftaran belum berhasil. Silakan coba lagi.');
+    $('#register-form').reset();
+    msg.textContent = data.session
+      ? 'Pendaftaran terkirim. Akun menunggu verifikasi admin sebelum dapat digunakan.'
+      : 'Pendaftaran terkirim. Periksa email untuk verifikasi akun. Setelah itu admin akan memeriksa pendaftaran pegawai.';
+  } catch (err) {
+    msg.textContent = err.message || 'Pendaftaran gagal. Periksa data dan koneksi, lalu coba lagi.';
+    msg.classList.add('error');
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Kirim Pendaftaran';
+  }
+}
+
 function init() {
   DB.init();
   $('#login-form').onsubmit = login;
+  $('#register-form').onsubmit = daftarPegawai;
+  $('#show-login').onclick = () => setAuthMode('login');
+  $('#show-register').onclick = () => setAuthMode('register');
   $('#logout').onclick = () => {
     catat('Keluar dari sistem', '-');
     localStorage.removeItem(SESI_KEY);
