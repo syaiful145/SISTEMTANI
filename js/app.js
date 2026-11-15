@@ -762,51 +762,96 @@ async function detailLaporan(id) {
   $('#modal [data-tutup]').onclick = tutupModal;
 }
 
-function pageAbsensi() {
-  const u = me(), today = hariIni();
-  if (u.tipe === 'pegawai') {
-    const rows = DB.all('absensi').filter(a => String(a.pegawaiId) === String(u.id)).sort((a,b) => b.tanggal.localeCompare(a.tanggal));
-    const todayRow = rows.find(a => a.tanggal === today);
-    const actions = !todayRow ? '<button class="btn" data-act="absenMasuk">Absen Masuk</button>' :
-      !todayRow.pulangAt ? '<button class="btn" data-act="absenPulang">Absen Pulang</button>' :
-      '<span class="tag green">Absensi hari ini selesai</span>';
-    return { html: head('Absensi Pegawai', actions) +
-      (todayRow ? `<section class="card" style="margin-bottom:16px"><h3>Absensi Hari Ini</h3><p>Masuk: <strong>${esc(todayRow.masukAt ? waktuLokal(new Date(todayRow.masukAt)) : '-')}</strong></p><p>Pulang: <strong>${esc(todayRow.pulangAt ? waktuLokal(new Date(todayRow.pulangAt)) : 'Belum absen pulang')}</strong></p><p>Lokasi masuk: ${esc(todayRow.masukAlamat || '-')}</p><p>Lokasi pulang: ${esc(todayRow.pulangAlamat || '-')}</p></section>` : '<section class="card" style="margin-bottom:16px"><p>Anda belum melakukan absensi hari ini.</p></section>') +
-      tabel(['Tanggal','Waktu Masuk','Waktu Pulang','Lokasi Masuk','Lokasi Pulang'],
-        rows.map(a => [tgl(a.tanggal), a.masukAt ? waktuLokal(new Date(a.masukAt)) : '-', a.pulangAt ? waktuLokal(new Date(a.pulangAt)) : '-', esc(a.masukAlamat || '-'), esc(a.pulangAlamat || '-')]), 'Belum ada riwayat absensi.') };
-  }
-  const rows = DB.all('absensi').slice().sort((a,b) => b.tanggal.localeCompare(a.tanggal) || b.id-a.id);
-  const hadir = rows.filter(a => a.tanggal === today).length;
-  const pegawaiAktif = DB.all('pegawai').filter(p => p.statusVerifikasi === 'disetujui').length;
-  return { html: head('Rekap Absensi Pegawai') +
-    `<section class="stats-grid"><div class="stat-card"><span>Sudah absen hari ini</span><strong>${hadir}</strong></div><div class="stat-card"><span>Belum absen hari ini</span><strong>${Math.max(0, pegawaiAktif-hadir)}</strong></div></section>` +
-    tabel(['Tanggal','Pegawai','Waktu Masuk','Waktu Pulang','Lokasi Masuk','Lokasi Pulang'],
-      rows.map(a => [tgl(a.tanggal), esc(namaPegawai(a.pegawaiId)), a.masukAt ? waktuLokal(new Date(a.masukAt)) : '-', a.pulangAt ? waktuLokal(new Date(a.pulangAt)) : '-', esc(a.masukAlamat || '-'), esc(a.pulangAlamat || '-')]), 'Belum ada data absensi.') };
+async function fotoKameraAbsensi(judul) {
+  return new Promise((resolve,reject)=>{
+    const box=$('#modal');
+    box.innerHTML='<div class="modal-box"><div class="modal-head"><h3>'+esc(judul)+'</h3><button class="icon-btn" type="button" data-close-camera>✕</button></div><video id="att-video" autoplay playsinline muted style="width:100%;max-height:320px;background:#111"></video><canvas id="att-canvas" style="display:none;width:100%"></canvas><p id="att-info" class="muted">Aktifkan kamera dan GPS.</p><p id="att-error" class="form-error"></p><div class="form-actions"><button type="button" class="btn ghost" id="att-open">Buka Kamera</button><button type="button" class="btn" id="att-shot" disabled>Ambil Foto</button><button type="button" class="btn" id="att-use" disabled>Gunakan Foto</button></div></div>';
+    box.classList.remove('hidden');
+    const v=$('#att-video'),can=$('#att-canvas'),info=$('#att-info'),err=$('#att-error');
+    let stream=null,blob=null,gps=null,at=null,done=false;
+    const stop=()=>{if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;};
+    const finish=(val,error)=>{if(done)return;done=true;stop();tutupModal();error?reject(error):resolve(val);};
+    box.querySelector('[data-close-camera]').onclick=()=>finish(null,new Error('Foto dibatalkan.'));
+    $('#att-open').onclick=async()=>{try{if(!navigator.mediaDevices?.getUserMedia)throw new Error('Kamera memerlukan HTTPS.');stop();stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});v.srcObject=stream;$('#att-shot').disabled=false;info.textContent='Kamera aktif.';}catch(x){err.textContent=x.message;}};
+    $('#att-shot').onclick=()=>{
+      if(!v.videoWidth)return;
+      $('#att-shot').disabled=true;info.textContent='Mengambil GPS dan alamat...';
+      if(!navigator.geolocation){err.textContent='GPS tidak didukung.';$('#att-shot').disabled=false;return;}
+      navigator.geolocation.getCurrentPosition(async pos=>{
+        try{
+          gps={lat:pos.coords.latitude,lon:pos.coords.longitude,accuracy:pos.coords.accuracy};
+          gps.place=await namaLokasiGPS(gps.lat,gps.lon);at=new Date();
+          can.width=v.videoWidth;can.height=v.videoHeight;
+          const x=can.getContext('2d');x.drawImage(v,0,0,can.width,can.height);
+          const band=Math.max(170,Math.round(can.height*.27));x.fillStyle='rgba(0,0,0,.75)';x.fillRect(0,can.height-band,can.width,band);
+          const z=Math.max(16,Math.round(can.width/44));x.fillStyle='#fff';x.font='bold '+z+'px sans-serif';
+          x.fillText(waktuLokal(at),14,can.height-band+z*1.4);x.font=(z*.78)+'px sans-serif';
+          x.fillText(String(gps.place||'Alamat tidak ditemukan').slice(0,90),14,can.height-band+z*2.7);
+          x.fillText('GPS '+gps.lat.toFixed(6)+', '+gps.lon.toFixed(6)+' ±'+Math.round(gps.accuracy)+' m',14,can.height-16);
+          can.toBlob(b=>{if(!b){err.textContent='Foto gagal diproses.';$('#att-shot').disabled=false;return;}blob=b;v.style.display='none';can.style.display='block';stop();info.textContent='Foto tercap waktu dan lokasi.';$('#att-use').disabled=false;},'image/jpeg',.88);
+        }catch(x){err.textContent=x.message;$('#att-shot').disabled=false;}
+      },x=>{err.textContent='GPS gagal: '+x.message;$('#att-shot').disabled=false;},{enableHighAccuracy:true,timeout:20000,maximumAge:0});
+    };
+    $('#att-use').onclick=()=>finish({blob,gps,at});
+  });
 }
-async function lakukanAbsensi(jenis) {
-  const u = me();
-  if (u?.tipe !== 'pegawai') return alert('Hanya pegawai yang dapat melakukan absensi.');
-  if (!navigator.geolocation) return alert('Browser tidak mendukung GPS.');
-  try {
-    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }));
-    const lat = pos.coords.latitude, lon = pos.coords.longitude;
-    const alamat = await namaLokasiGPS(lat, lon);
-    const now = new Date().toISOString();
-    const existing = DB.all('absensi').find(a => String(a.pegawaiId) === String(u.id) && a.tanggal === hariIni());
-    if (jenis === 'masuk') {
-      if (existing) return alert('Anda sudah absen masuk hari ini.');
-      await DB.add('absensi', { pegawaiId: u.id, authUserId: u.authId, tanggal: hariIni(), masukAt: now, masukLat: lat, masukLon: lon, masukAlamat: alamat });
-      await catat('Absen masuk', alamat);
-    } else {
-      if (!existing || existing.pulangAt) return alert('Data absen masuk tidak ditemukan atau Anda sudah absen pulang.');
-      await DB.update('absensi', existing.id, { pulangAt: now, pulangLat: lat, pulangLon: lon, pulangAlamat: alamat });
-      await catat('Absen pulang', alamat);
-    }
-    await DB.init(isAdmin());
-    render();
-  } catch (e) {
-    alert('Absensi gagal: ' + (e.message || 'Lokasi tidak berhasil diambil. Izinkan akses lokasi.'));
+async function unggahBuktiAbsensi(bucket,userId,blob){
+  if(!blob||blob.size>5242880)throw new Error('Foto wajib ada dan maksimal 5 MB.');
+  const path=userId+'/'+Date.now()+'-'+crypto.randomUUID()+'.jpg';
+  const {error}=await supabaseClient.storage.from(bucket).upload(path,blob,{contentType:'image/jpeg',upsert:false});
+  if(error)throw error;return path;
+}
+function pageAbsensi(){
+  const u=me(),today=hariIni(),cfg=DB.all('pengaturanAbsensi')[0]||{jamMasuk:'08:00',jamPulang:'17:00',toleransiTerlambat:0},izin=DB.all('izin');
+  if(u.tipe==='pegawai'){
+    const rows=DB.all('absensi').filter(a=>String(a.pegawaiId)===String(u.id)).sort((a,b)=>b.tanggal.localeCompare(a.tanggal)),a=rows.find(x=>x.tanggal===today);
+    const milik=izin.filter(x=>String(x.pegawaiId)===String(u.id)).sort((x,y)=>y.tanggalMulai.localeCompare(x.tanggalMulai));
+    const btn=!a?'<button class="btn" data-act="absenMasuk">Absen Masuk + Foto</button>':!a.pulangAt?'<button class="btn" data-act="absenPulang">Absen Pulang + Foto</button>':'<span class="tag green">Selesai</span>';
+    return {html:head('Absensi Pegawai',btn+' <button class="btn ghost" data-act="ajukanIzin">Ajukan Izin / Sakit</button>')+
+      '<section class="card"><h3>Jadwal Kerja</h3><p>Masuk: <b>'+esc(cfg.jamMasuk)+'</b> · Pulang: <b>'+esc(cfg.jamPulang)+'</b> · Toleransi: '+(Number(cfg.toleransiTerlambat)||0)+' menit</p></section>'+
+      (a?'<section class="card"><h3>Hari Ini</h3><p>Masuk: '+(a.masukAt?waktuLokal(new Date(a.masukAt)):'-')+'</p><p>Pulang: '+(a.pulangAt?waktuLokal(new Date(a.pulangAt)):'Belum absen')+'</p><p>'+esc(a.masukAlamat||'-')+'</p></section>':'<section class="card">Belum ada absensi hari ini.</section>')+
+      '<h3>Pengajuan Izin</h3>'+tabel(['Periode','Jenis','Alasan','Status'],milik.map(x=>[tgl(x.tanggalMulai)+' – '+tgl(x.tanggalSelesai),esc(x.jenis),esc(x.alasan),esc(x.status)]),'Belum ada izin.')+
+      '<h3>Riwayat Absensi</h3>'+tabel(['Tanggal','Masuk','Pulang','Lokasi'],rows.map(x=>[tgl(x.tanggal),x.masukAt?waktuLokal(new Date(x.masukAt)):'-',x.pulangAt?waktuLokal(new Date(x.pulangAt)):'-',esc(x.masukAlamat||'-')]),'Belum ada riwayat.')};
   }
+  const peg=DB.all('pegawai').filter(p=>p.statusVerifikasi==='disetujui'),todayRows=DB.all('absensi').filter(x=>x.tanggal===today);
+  const status=peg.map(p=>{const a=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const iz=izin.find(x=>String(x.pegawaiId)===String(p.id)&&x.status==='disetujui'&&x.tanggalMulai<=today&&x.tanggalSelesai>=today);const st=a?'Hadir':iz?'Izin':'Belum absen';return [esc(p.nama),'<span class="tag '+(st==='Hadir'?'green':st==='Izin'?'amber':'red')+'">'+st+'</span>',a?.masukAt?waktuLokal(new Date(a.masukAt)):'-',a?.pulangAt?waktuLokal(new Date(a.pulangAt)):'-'];});
+  const pending=izin.filter(x=>x.status==='menunggu');
+  return {html:head('Rekap Absensi Pegawai')+
+    '<section class="card"><h3>Atur Jam Kerja</h3><form id="att-schedule" class="form-grid"><label class="field"><span>Jam masuk</span><input name="jamMasuk" type="time" value="'+esc(cfg.jamMasuk)+'" required></label><label class="field"><span>Jam pulang</span><input name="jamPulang" type="time" value="'+esc(cfg.jamPulang)+'" required></label><label class="field"><span>Toleransi terlambat (menit)</span><input name="toleransiTerlambat" type="number" min="0" max="180" value="'+(Number(cfg.toleransiTerlambat)||0)+'" required></label><button class="btn" type="submit">Simpan Jadwal</button><p id="att-schedule-msg" class="form-error full"></p></form></section>'+
+    '<h3>Status Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang'],status,'Belum ada pegawai.')+
+    '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Periode','Jenis','Alasan','Bukti','Keputusan'],pending.map(x=>[esc(namaPegawai(x.pegawaiId)),tgl(x.tanggalMulai)+' – '+tgl(x.tanggalSelesai),esc(x.jenis),esc(x.alasan),'<button class="btn tiny ghost" data-act="lihatBuktiIzin" data-id="'+x.id+'">Lihat</button>','<button class="btn tiny" data-act="prosesIzin" data-status="disetujui" data-id="'+x.id+'">Setujui</button> <button class="btn tiny danger" data-act="prosesIzin" data-status="ditolak" data-id="'+x.id+'">Tolak</button>']),'Tidak ada izin menunggu.'),
+    after:()=>{const form=$('#att-schedule');if(form)form.onsubmit=async ev=>{ev.preventDefault();const d={jamMasuk:form.elements.jamMasuk.value,jamPulang:form.elements.jamPulang.value,toleransiTerlambat:Number(form.elements.toleransiTerlambat.value)};const msg=$('#att-schedule-msg');try{if(d.jamPulang<=d.jamMasuk)throw new Error('Jam pulang harus setelah jam masuk.');const old=DB.all('pengaturanAbsensi')[0];if(old)await DB.update('pengaturanAbsensi',old.id,d);else await DB.add('pengaturanAbsensi',d);await DB.init(true);render();}catch(x){msg.textContent=x.message;}};}};
+}
+async function lakukanAbsensi(jenis){
+  const u=me();if(u?.tipe!=='pegawai')return alert('Hanya pegawai yang dapat absen.');
+  const a=DB.all('absensi').find(x=>String(x.pegawaiId)===String(u.id)&&x.tanggal===hariIni());
+  if(jenis==='masuk'&&a)return alert('Sudah absen masuk hari ini.');
+  if(jenis==='pulang'&&(!a||a.pulangAt))return alert('Data masuk tidak ditemukan atau sudah absen pulang.');
+  if(!confirm('Tindakan ini membuat catatan absensi resmi untuk hari ini. Lanjutkan?'))return;
+  try{const p=await fotoKameraAbsensi('Foto Absen '+(jenis==='masuk'?'Masuk':'Pulang'));const path=await unggahBuktiAbsensi('absensi-bukti',u.authId,p.blob),now=new Date().toISOString();
+    const d=jenis==='masuk'?{masukAt:now,masukLat:p.gps.lat,masukLon:p.gps.lon,masukAlamat:p.gps.place,masukFotoPath:path,masukFotoCapturedAt:p.at.toISOString(),masukAccuracy:p.gps.accuracy}:{pulangAt:now,pulangLat:p.gps.lat,pulangLon:p.gps.lon,pulangAlamat:p.gps.place,pulangFotoPath:path,pulangFotoCapturedAt:p.at.toISOString(),pulangAccuracy:p.gps.accuracy};
+    try{if(jenis==='masuk')await DB.add('absensi',{pegawaiId:u.id,authUserId:u.authId,tanggal:hariIni(),...d});else await DB.update('absensi',a.id,d);}catch(x){await supabaseClient.storage.from('absensi-bukti').remove([path]);throw x;}
+    await DB.init(false);render();
+  }catch(x){if(x.message!=='Foto dibatalkan.')alert('Absensi gagal: '+x.message);}
+}
+async function ajukanIzinPegawai(){
+  const u=me();try{const p=await fotoKameraAbsensi('Foto Bukti Izin / Sakit');
+    openModal('Ajukan Izin / Sakit',[{name:'tanggalMulai',label:'Tanggal mulai',type:'date',req:true,def:hariIni()},{name:'tanggalSelesai',label:'Tanggal selesai',type:'date',req:true,def:hariIni()},{name:'jenis',label:'Jenis izin',type:'select',options:['Izin','Sakit'],req:true},{name:'alasan',label:'Alasan',type:'textarea',req:true,full:true}],{},async d=>{
+      if(d.tanggalSelesai<d.tanggalMulai)return 'Tanggal selesai tidak boleh sebelum tanggal mulai.';
+      const path=await unggahBuktiAbsensi('izin-bukti',u.authId,p.blob);
+      try{await DB.add('izin',{pegawaiId:u.id,authUserId:u.authId,tanggalMulai:d.tanggalMulai,tanggalSelesai:d.tanggalSelesai,jenis:d.jenis,alasan:d.alasan,fotoPath:path,status:'menunggu'});}catch(x){await supabaseClient.storage.from('izin-bukti').remove([path]);throw x;}
+      await DB.init(false);return null;
+    });
+  }catch(x){if(x.message!=='Foto dibatalkan.')alert('Pengajuan izin gagal: '+x.message);}
+}
+async function prosesIzinPegawai(id,status){
+  if(!isAdmin())return;const catatan=status==='ditolak'?prompt('Alasan penolakan (wajib):'):'';
+  if(status==='ditolak'&&!catatan?.trim())return;
+  try{await DB.update('izin',id,{status,catatanAdmin:catatan||null,diprosesOleh:me().authId,diprosesAt:new Date().toISOString()});await DB.init(true);render();}catch(x){alert('Gagal memproses izin: '+x.message);}
+}
+async function lihatBuktiIzin(id){
+  const x=DB.get('izin',id);if(!x?.fotoPath)return;const {data,error}=await supabaseClient.storage.from('izin-bukti').createSignedUrl(x.fotoPath,300);
+  if(error)return alert(error.message);openInfo('Bukti Izin','<img src="'+esc(data.signedUrl)+'" style="width:100%;max-height:420px;object-fit:contain" alt="Bukti izin">');
 }
 
 function pageNotifikasi() {
@@ -1420,6 +1465,9 @@ function aksiKlik(e) {
     case 'lapor': return openLapor();
     case 'absenMasuk': return lakukanAbsensi('masuk');
     case 'absenPulang': return lakukanAbsensi('pulang');
+    case 'ajukanIzin': return ajukanIzinPegawai();
+    case 'prosesIzin': return prosesIzinPegawai(id,b.dataset.status);
+    case 'lihatBuktiIzin': return lihatBuktiIzin(id);
     case 'detailLaporan': return detailLaporan(id);
     case 'statusLaporan': {
       const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
