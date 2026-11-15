@@ -269,7 +269,7 @@ function openCrud(tbl, id) {
 function cfgTanaman() {
   return {
     judul: 'Data Tanaman',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdmin(),
+    tambah: false, ubah: false, hapus: false,
     nama: r => r.nama,
     kolom: [
       { h: 'Nama', f: r => esc(r.nama) },
@@ -298,7 +298,7 @@ function cfgTanaman() {
 function cfgPenanaman() {
   return {
     judul: 'Data Penanaman',
-    tambah: true, ubah: true, hapus: true,
+    tambah: false, ubah: false, hapus: false,
     nama: r => namaTanaman(r.tanamanId),
     kolom: [
       { h: 'Tanaman', f: r => esc(namaTanaman(r.tanamanId)) },
@@ -322,7 +322,7 @@ function cfgPenanaman() {
 function cfgPanen() {
   return {
     judul: 'Data Panen',
-    tambah: true, ubah: true, hapus: true,
+    tambah: false, ubah: false, hapus: false,
     nama: r => `Panen ${rp(r.kg)} kg`,
     kolom: [
       { h: 'Tanggal', f: r => tgl(r.tanggal) },
@@ -481,8 +481,15 @@ function openLapor() {
     <form id="form-lapor-bukti" class="form-grid">
       <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
       <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>
-      <label class="field full"><span>Lokasi lahan *</span><input name="lokasi" required></label>
-      <label class="field full"><span>Deskripsi kegiatan *</span><textarea name="deskripsi" rows="3" required></textarea></label>
+      <label class="field full"><span>Lokasi lahan / blok *</span><input name="lokasi" required placeholder="Contoh: Blok A, petak 2"></label>
+      <label class="field full"><span>Nama tanaman *</span><select name="tanamanNama" required><option value="">Pilih tanaman</option>${DB.all('tanaman').map(t => '<option value="'+esc(t.nama)+'">'+esc(t.nama)+'</option>').join('')}</select></label>
+      <label class="field"><span>Luas dikerjakan (m²)</span><input name="luasM2" type="number" min="0" step="0.01" placeholder="Contoh: 25"></label>
+      <label class="field"><span>Jumlah ditanam (batang/bibit)</span><input name="jumlahDitanam" type="number" min="0" step="1" placeholder="Contoh: 100"></label>
+      <label class="field"><span>Umur tanaman saat ini (hari)</span><input name="umurTanamanHari" type="number" min="0" step="1" placeholder="Contoh: 14"></label>
+      <label class="field"><span>Status tanaman</span><select name="statusTanaman"><option value="">Pilih status</option><option>Ditanam</option><option>Dalam perawatan</option><option>Siap panen</option><option>Selesai</option></select></label>
+      <label class="field"><span>Benih yang digunakan</span><select name="benihBarangId"><option value="">Tidak menggunakan benih</option>${DB.all('barang').filter(b => String(b.kategori||'').toLowerCase()==='bibit' && Number(b.stok)>0).map(b => '<option value="'+b.id+'">'+esc(b.nama)+' · sisa '+Number(b.stok)+' '+esc(b.satuan||'')+'</option>').join('')}</select></label>
+      <label class="field"><span>Jumlah benih dipakai</span><input name="benihDipakai" type="number" min="0" step="0.01" placeholder="0"></label>
+      <label class="field full"><span>Deskripsi detail pekerjaan *</span><textarea name="deskripsi" rows="3" required placeholder="Jelaskan pekerjaan yang dilakukan, hasil, kendala, dan kondisi tanaman."></textarea></label>
       <div class="field full">
         <span>Foto langsung dari kamera (wajib)</span>
         <video id="lapor-video" autoplay playsinline muted style="width:100%;max-height:320px;background:#111;border-radius:12px;display:none"></video>
@@ -575,13 +582,27 @@ $('#lapor-ulang-foto').onclick = () => {
     if (!capturedBlob || !gps || !capturedAt) { errBox.textContent = 'Wajib ambil foto langsung dari kamera beserta lokasi GPS.'; return; }
     if (capturedBlob.size > 5 * 1024 * 1024) { errBox.textContent = 'Ukuran foto melebihi 5 MB.'; return; }
     submit.disabled = true; submit.textContent = 'Mengirim...';
-    const data = { tanggal: form.elements.tanggal.value, jenis: form.elements.jenis.value, lokasi: form.elements.lokasi.value.trim(), deskripsi: form.elements.deskripsi.value.trim() };
+    const benihBarangId = form.elements.benihBarangId.value ? Number(form.elements.benihBarangId.value) : null;
+    const benihDipakai = Number(form.elements.benihDipakai.value || 0);
+    const luasM2 = form.elements.luasM2.value === '' ? null : Number(form.elements.luasM2.value);
+    const jumlahDitanam = form.elements.jumlahDitanam.value === '' ? null : Number(form.elements.jumlahDitanam.value);
+    const umurTanamanHari = form.elements.umurTanamanHari.value === '' ? null : Number(form.elements.umurTanamanHari.value);
+    if (benihDipakai < 0 || (benihDipakai > 0 && !benihBarangId) || (benihBarangId && benihDipakai <= 0)) { errBox.textContent = 'Pilih benih dan isi jumlah pemakaian lebih dari nol, atau kosongkan keduanya.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
+    if ((luasM2 !== null && (!Number.isFinite(luasM2)||luasM2<=0)) || (jumlahDitanam !== null && (!Number.isInteger(jumlahDitanam)||jumlahDitanam<0)) || (umurTanamanHari !== null && (!Number.isInteger(umurTanamanHari)||umurTanamanHari<0))) { errBox.textContent='Periksa kembali luas, jumlah ditanam, dan umur tanaman.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
+    const barangBenih = benihBarangId ? DB.get('barang',benihBarangId) : null;
+    if (benihBarangId && (!barangBenih || benihDipakai > Number(barangBenih.stok))) { errBox.textContent='Stok benih tidak mencukupi.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
+    const data = { tanggal: form.elements.tanggal.value, jenis: form.elements.jenis.value, lokasi: form.elements.lokasi.value.trim(), deskripsi: form.elements.deskripsi.value.trim(), tanamanNama:form.elements.tanamanNama.value, luasM2, jumlahDitanam, umurTanamanHari, statusTanaman:form.elements.statusTanaman.value||null, benihBarangId, benihDipakai:benihBarangId?benihDipakai:null };
     const path = `${u.authId}/${Date.now()}-${crypto.randomUUID()}.jpg`;
     try {
       const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
       if (uploadError) throw uploadError;
       try {
-        await DB.add('laporan', { pegawaiId: u.id, ...data, fotoPath: path, fotoLat: gps.lat, fotoLon: gps.lon, fotoAccuracy: gps.accuracy, fotoLokasi: gps.place, fotoCapturedAt: capturedAt.toISOString(), status: 'belum_diterima', dibaca: false });
+        const saved = await DB.add('laporan', { pegawaiId: u.id, ...data, fotoPath: path, fotoLat: gps.lat, fotoLon: gps.lon, fotoAccuracy: gps.accuracy, fotoLokasi: gps.place, fotoCapturedAt: capturedAt.toISOString(), status: 'belum_diterima', dibaca: false });
+        if (benihBarangId) {
+          const { error: stockError } = await supabaseClient.rpc('pegawai_gunakan_benih_laporan', { p_barang_id:benihBarangId, p_jumlah:benihDipakai, p_keterangan:data.deskripsi, p_laporan_id:saved.id });
+          if (stockError) { await DB.remove('laporan',saved.id); throw stockError; }
+          await DB.init(false);
+        }
       } catch (error) {
         await supabaseClient.storage.from('laporan-bukti').remove([path]); throw error;
       }
