@@ -587,9 +587,6 @@ function openLapor(jenisAwal = '', draftId = null) {
     const plant = kind === 'Penanaman';
     const harvest = kind === 'Panen';
     box.querySelectorAll('[data-work-field]').forEach(el => {
-      const show = (el.dataset.workField === 'plant' && plant) ||
-        (el.dataset.workField === 'harvest' && harvest) ||
-        (el.dataset.workField === 'material' && !harvest);
       const field = el.dataset.workField;
       const show = (field === 'plant' && plant) ||
         (field === 'harvest' && harvest) ||
@@ -871,6 +868,8 @@ function pagePupuk() {
   cfg.filter = r => String(r.kategori || '').trim().toLowerCase() === 'pupuk';
   cfg.kosong = 'Belum ada data pupuk. Admin dapat menambahkan pupuk melalui tombol Tambah Barang.';
   cfg.labelTambah = '+ Tambah Pupuk';
+  const fields = cfg.fields;
+  cfg.fields = isEdit => fields(isEdit).map(f => f.name === 'kategori' ? { ...f, def: 'Pupuk' } : f);
   return { html: crud('barang', cfg) };
 }
 
