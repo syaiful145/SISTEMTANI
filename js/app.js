@@ -1996,6 +1996,8 @@ async function init() {
   };
   $('#overlay').onclick = closeSidebar;
   $('#content').addEventListener('click', aksiKlik);
+  // Modal detail berada di luar #content; delegasikan klik tombol aksi di dalam modal.
+  $('#modal').addEventListener('click', aksiKlik);
   $('#content').addEventListener('change', e => {
     const attFilter = e.target.dataset.attHistoryFilter;
     if (attFilter === 'year') { ATT_HISTORY_YEAR = e.target.value; ATT_HISTORY_MONTH = ''; render(); return; }
