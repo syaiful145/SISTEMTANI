@@ -49,13 +49,18 @@ const DB = {
     return row;
   },
   async remove(tabel, id) {
-    const { error, count } = await supabaseClient
+    if (!TABLES[tabel]) throw new Error('Jenis data tidak dikenal.');
+    if (tabel === 'pegawai' && (typeof me !== 'function' || me()?.adminLevel !== 'utama')) {
+      throw new Error('Hanya Admin Utama yang boleh menghapus data karyawan.');
+    }
+    const { data, error } = await supabaseClient
       .from(TABLES[tabel])
-      .delete({ count: 'exact' })
-      .eq('id', id);
+      .delete()
+      .eq('id', id)
+      .select('id');
     if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
-    if (count === 0) {
-      throw new Error(`Data ${tabel} tidak terhapus. Periksa izin DELETE pada kebijakan RLS Supabase atau pastikan data masih ada.`);
+    if (!data || data.length === 0) {
+      throw new Error(`Data ${tabel} tidak terhapus. Kemungkinan dibatasi kebijakan RLS Supabase atau data sudah tidak ada.`);
     }
     this.d[tabel] = this.d[tabel].filter(x => String(x.id) !== String(id));
   },
