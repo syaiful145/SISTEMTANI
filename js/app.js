@@ -544,7 +544,7 @@ function openLapor(jenisAwal = '', draftId = null) {
       <div class="field" data-work-field="material"><span>Jumlah bahan dipakai</span><input name="benihDipakai" type="number" min="0" step="0.01" placeholder="0"></div>
       <label class="field full"><span>Catatan / hasil pekerjaan *</span><textarea name="deskripsi" rows="3" required placeholder="Jelaskan pekerjaan yang dilakukan, hasil, kendala, dan kondisi tanaman."></textarea></label>
       <div class="field full">
-        <span>Foto langsung dari kamera (wajib)</span>
+        <span>Foto langsung dari kamera (wajib saat mengirim)</span><small class="muted">Draft bisa disimpan lebih dulu tanpa foto. Saat laporan dikirim, wajib ambil foto baru beserta GPS.</small>
         <video id="lapor-video" autoplay playsinline muted style="width:100%;max-height:320px;background:#111;border-radius:12px;display:none"></video>
         <canvas id="lapor-canvas" style="width:100%;max-height:320px;display:none;border-radius:12px"></canvas>
         <p id="lapor-camera-info" class="muted">Buka kamera dan izinkan akses kamera serta lokasi saat diminta.</p>
@@ -561,6 +561,7 @@ function openLapor(jenisAwal = '', draftId = null) {
   box.classList.remove('hidden');
   const close = () => { stopLaporCamera(); tutupModal(); };
   box.querySelectorAll('[data-tutup]').forEach(x => x.onclick = close);
+  const form = $('#form-lapor-bukti');
   const video = $('#lapor-video'), canvas = $('#lapor-canvas');
   const info = $('#lapor-camera-info'), gpsInfo = $('#lapor-gps-info'), errBox = $('#lapor-error');
   const jenisSelect = form.elements.jenis;
