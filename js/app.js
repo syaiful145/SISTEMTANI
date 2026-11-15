@@ -775,7 +775,7 @@ async function resetPasswordPegawai(id) {
   const temporaryPassword = buatPasswordSementara();
 
   try {
-    const { data, error } = await supabaseClient.functions.invoke('admin-riset-password', {
+    const { data, error } = await supabaseClient.functions.invoke('admin-reset-password', {
       body: { pegawaiId: id, temporaryPassword }
     });
 
@@ -922,6 +922,36 @@ function pageProfil() {
     }};
 }
 
+async function kelolaAdminKedua(action, adminId, nama) {
+  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang dapat mengelola Admin Kedua.');
+  if (action === 'delete' && !confirm('Hapus akun Admin Kedua ' + nama + '? Akun tersebut tidak dapat login lagi.')) return;
+  let temporaryPassword = '';
+  if (action === 'reset') {
+    if (!confirm('Buat password sementara baru untuk ' + nama + '?')) return;
+    temporaryPassword = buatPasswordSementara();
+  }
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('admin-manage-admin', {
+      body: { action, adminId, temporaryPassword }
+    });
+    if (error) {
+      let message = error.message || 'Permintaan gagal.';
+      try { const detail = await error.context?.json(); if (detail?.error) message = detail.error; } catch (_) {}
+      throw new Error(message);
+    }
+    if (!data?.success) throw new Error(data?.error || 'Server tidak mengonfirmasi tindakan.');
+    if (action === 'reset') {
+      openInfo('Password sementara · ' + nama,
+        '<p>Password Admin Kedua berhasil direset.</p><p><strong>Password sementara:</strong></p><p><code>' + esc(temporaryPassword) + '</code></p>' +
+        '<button class="btn" data-act="salinPassword" data-password="' + esc(temporaryPassword) + '">Salin password</button>' +
+        '<p class="muted">Sampaikan password ini secara pribadi. Admin Kedua wajib menggantinya setelah login.</p>');
+    } else {
+      alert('Akun Admin Kedua berhasil dihapus.');
+      render();
+    }
+  } catch (ex) { alert('Gagal mengelola Admin: ' + (ex.message || 'Kesalahan tidak diketahui.')); }
+}
+
 function pageAdmins() {
   return { html: head('Manajemen Admin') + '<div id="admin-list-loading" class="empty">Memuat daftar administrator...</div>', after: async () => {
     const target = $('#admin-list-loading');
@@ -929,10 +959,20 @@ function pageAdmins() {
       const { data, error } = await supabaseClient.from('profiles').select('id,nama,username,role,admin_level').eq('role', 'admin').order('nama');
       if (error) throw error;
       const admins = data || [];
+      const utama = me()?.adminLevel === 'utama';
+      const rows = admins.map(x => [
+        '<strong>' + esc(x.nama) + '</strong>',
+        esc(x.username || '-'),
+        x.admin_level === 'utama' ? '<span class="tag green">Admin Utama</span>' : '<span class="tag blue">Admin Kedua</span>',
+        x.admin_level === 'kedua' && utama
+          ? '<div class="row-actions"><button class="btn tiny ghost" data-act="resetAdmin" data-id="' + esc(x.id) + '" data-nama="' + esc(x.nama) + '">Reset Password</button><button class="btn tiny danger" data-act="hapusAdmin" data-id="' + esc(x.id) + '" data-nama="' + esc(x.nama) + '">Hapus</button></div>'
+          : '<span class="muted">-</span>'
+      ]);
       target.outerHTML = '<div class="stats"><div class="stat"><span>Total Administrator</span><strong>' + admins.length +
         '</strong></div><div class="stat"><span>Admin Utama</span><strong>' + admins.filter(x => x.admin_level === 'utama').length +
         '</strong></div><div class="stat"><span>Admin Kedua</span><strong>' + admins.filter(x => x.admin_level === 'kedua').length +
-        '</strong></div></div>' + tabel(['Nama', 'Username', 'Tingkatan'], admins.map(x => [esc(x.nama), esc(x.username || '-'), x.admin_level === 'utama' ? '<span class="tag green">Admin Utama</span>' : '<span class="tag blue">Admin Kedua</span>']), 'Belum ada administrator.');
+        '</strong></div></div>' + (utama ? '<p class="muted">Admin Utama dapat mereset password dan menghapus Admin Kedua. Akun Admin Utama dilindungi.</p>' : '<p class="muted">Anda dapat melihat daftar administrator. Pengelolaan akun hanya tersedia untuk Admin Utama.</p>') +
+        tabel(['Nama', 'Username', 'Tingkatan', 'Aksi'], rows, 'Belum ada administrator.');
     } catch (ex) { target.textContent = 'Gagal memuat daftar admin: ' + (ex.message || 'Periksa izin akses.'); }
   }};
 }
@@ -1056,6 +1096,8 @@ function aksiKlik(e) {
     case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
     case 'resetPasswordPegawai': return resetPasswordPegawai(id);
+    case 'resetAdmin': return kelolaAdminKedua('reset', b.dataset.id, b.dataset.nama);
+    case 'hapusAdmin': return kelolaAdminKedua('delete', b.dataset.id, b.dataset.nama);
     case 'salinPassword': {
       const password = b.dataset.password || '';
       if (navigator.clipboard?.writeText) {
