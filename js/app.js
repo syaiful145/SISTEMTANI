@@ -14,7 +14,7 @@ const keluarTerakhir = id => DB.all('transaksi').filter(t => t.barangId === id &
 const JENIS_TANAMAN = ['Serealia', 'Hortikultura', 'Sayuran', 'Buah', 'Perkebunan', 'Lainnya'];
 const STATUS_TANAMAN = ['Ditanam', 'Dalam perawatan', 'Siap panen', 'Selesai'];
 const STATUS_PENANAMAN = ['Dijadwalkan', 'Ditanam', 'Selesai'];
-const KATEGORI_BARANG = ['Pupuk', 'Bibit', 'Pestisida', 'Peralatan pertanian', 'Perlengkapan lainnya'];
+const KATEGORI_BARANG = ['Pupuk', 'Bibit', 'Hasil Panen', 'Pestisida', 'Peralatan pertanian', 'Perlengkapan lainnya'];
 const JENIS_KEGIATAN = ['Penanaman', 'Pemupukan', 'Penyiraman', 'Penyemprotan', 'Panen', 'Perawatan lainnya'];
 const AKSES = { penanaman: 'Penanaman', panen: 'Panen', gudang: 'Gudang' };
 const WARNA_STATUS = { 'Ditanam': 'blue', 'Dalam perawatan': 'amber', 'Siap panen': 'green', 'Selesai': 'gray', 'Dijadwalkan': 'amber' };
@@ -78,6 +78,7 @@ const MENU = [
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
   { id: 'gudang', label: 'Gudang', icon: '📦', akses: 'gudang' },
+  { id: 'pupuk', label: 'Stok Pupuk', icon: '🧪', adminOnly: true },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
   { id: 'aktivitas', label: 'Pekerjaan Lapangan', icon: '📝' },
   { id: 'absensi', label: 'Absensi', icon: '🕒' },
@@ -246,7 +247,7 @@ const aksiBtn = (tbl, r, cfg) => `<div class="row-actions">
 
 function crud(tbl, cfg) {
   CFG[tbl] = cfg;
-  const rows = DB.all(tbl).slice().sort((a, b) => b.id - a.id);
+  const rows = DB.all(tbl).filter(r => !cfg.filter || cfg.filter(r)).slice().sort((a, b) => b.id - a.id);
   const adaAksi = cfg.ubah || cfg.hapus || cfg.extra;
   const tombolTambah = cfg.tambah
     ? `<button class="btn" data-act="tambah" data-tbl="${tbl}">${cfg.labelTambah || '+ Tambah'}</button>`
@@ -849,6 +850,15 @@ function gambarGrafik() {
       }
     }
   });
+}
+
+function pagePupuk() {
+  const cfg = cfgBarang();
+  cfg.judul = 'Stok Pupuk';
+  cfg.filter = r => String(r.kategori || '').trim().toLowerCase() === 'pupuk';
+  cfg.kosong = 'Belum ada data pupuk. Admin dapat menambahkan pupuk melalui tombol Tambah Barang.';
+  cfg.labelTambah = '+ Tambah Pupuk';
+  return { html: crud('barang', cfg) };
 }
 
 function pageGudang() {
@@ -1666,6 +1676,7 @@ const PAGES = {
   penanaman: () => pagePekerjaan('Penanaman'),
   panen: () => pagePekerjaan('Panen'),
   gudang: pageGudang,
+  pupuk: pagePupuk,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
   aktivitas: pageAktivitas,
   absensi: pageAbsensi,
