@@ -840,6 +840,69 @@ async function prosesVerifikasiPegawai(id, status) {
 }
 
 /* ===== Router & render ===== */
+
+function pageProfil() {
+  const u = me();
+  const photo = u.avatarUrl ? '<img src="' + esc(u.avatarUrl) + '" class="thumb-lg" alt="Foto profil">' : '<p class="muted">Belum ada foto profil.</p>';
+  return { html: head('Profil Saya') + '<div class="card" style="max-width:620px">' + photo +
+    '<form id="profil-form" class="form-grid">' +
+    '<label class="field full"><span>Nama</span><input id="profil-nama" maxlength="100" value="' + esc(u.nama) + '" required></label>' +
+    '<label class="field full"><span>Foto profil (maks. 350 KB)</span><input id="profil-foto" type="file" accept="image/*"></label>' +
+    '<p id="profil-error" class="form-error full"></p><div class="form-actions"><button class="btn">Simpan Profil</button></div></form>' +
+    '<hr style="border:0;border-top:1px solid var(--garis);margin:22px 0"><h3>Ubah Password</h3>' +
+    '<form id="profil-pass-form" class="form-grid">' +
+    '<label class="field full"><span>Password baru (minimal 8 karakter)</span><input id="profil-pass" type="password" minlength="8" required></label>' +
+    '<label class="field full"><span>Ulangi password baru</span><input id="profil-pass2" type="password" minlength="8" required></label>' +
+    '<p id="profil-pass-error" class="form-error full"></p><div class="form-actions"><button class="btn">Ubah Password</button></div></form></div>', after: () => {
+      $('#profil-form').onsubmit = async e => {
+        e.preventDefault();
+        const errBox = $('#profil-error');
+        try {
+          const nama = $('#profil-nama').value.trim();
+          if (!nama) throw new Error('Nama wajib diisi.');
+          const file = $('#profil-foto').files[0];
+          let avatar = u.avatarUrl || '';
+          if (file) {
+            if (!file.type.startsWith('image/') || file.size > 350 * 1024) throw new Error('Pilih foto maksimal 350 KB.');
+            avatar = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = reject; fr.readAsDataURL(file); });
+          }
+          const { error } = await supabaseClient.from('profiles').update({ nama, avatar_url: avatar }).eq('id', u.authId);
+          if (error) throw error;
+          if (u.tipe === 'pegawai') {
+            const { error: pe } = await supabaseClient.from('pegawai').update({ nama }).eq('auth_user_id', u.authId);
+            if (pe) throw pe;
+            const pr = DB.get('pegawai', u.id); if (pr) pr.nama = nama;
+          }
+          u.nama = nama; u.avatarUrl = avatar;
+          alert('Profil berhasil diperbarui.'); render();
+        } catch (ex) { errBox.textContent = ex.message || 'Gagal menyimpan profil.'; }
+      };
+      $('#profil-pass-form').onsubmit = async e => {
+        e.preventDefault();
+        const p = $('#profil-pass').value, p2 = $('#profil-pass2').value, box = $('#profil-pass-error');
+        box.textContent = '';
+        if (p.length < 8 || p !== p2) { box.textContent = p.length < 8 ? 'Password minimal 8 karakter.' : 'Konfirmasi password tidak sama.'; return; }
+        try { const { error } = await supabaseClient.auth.updateUser({ password: p }); if (error) throw error; $('#profil-pass-form').reset(); alert('Password berhasil diubah.'); }
+        catch (ex) { box.textContent = ex.message || 'Gagal mengubah password.'; }
+      };
+    }};
+}
+
+function pageAdmins() {
+  return { html: head('Manajemen Admin') + '<div id="admin-list-loading" class="empty">Memuat daftar administrator...</div>', after: async () => {
+    const target = $('#admin-list-loading');
+    try {
+      const { data, error } = await supabaseClient.from('profiles').select('id,nama,username,role,admin_level').eq('role', 'admin').order('nama');
+      if (error) throw error;
+      const admins = data || [];
+      target.outerHTML = '<div class="stats"><div class="stat"><span>Total Administrator</span><strong>' + admins.length +
+        '</strong></div><div class="stat"><span>Admin Utama</span><strong>' + admins.filter(x => x.admin_level === 'utama').length +
+        '</strong></div><div class="stat"><span>Admin Kedua</span><strong>' + admins.filter(x => x.admin_level === 'kedua').length +
+        '</strong></div></div>' + tabel(['Nama', 'Username', 'Tingkatan'], admins.map(x => [esc(x.nama), esc(x.username || '-'), x.admin_level === 'utama' ? '<span class="tag green">Admin Utama</span>' : '<span class="tag blue">Admin Kedua</span>']), 'Belum ada administrator.');
+    } catch (ex) { target.textContent = 'Gagal memuat daftar admin: ' + (ex.message || 'Periksa izin akses.'); }
+  }};
+}
+
 const PAGES = {
   dashboard: pageDashboard,
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
