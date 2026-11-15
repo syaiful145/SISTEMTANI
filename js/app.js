@@ -319,7 +319,7 @@ function detailLahan(id) {
 function cfgTanaman() {
   return {
     judul: 'Data Tanaman',
-    tambah: false, ubah: false, hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
     nama: r => r.nama,
     kolom: [
       { h: 'Nama', f: r => esc(r.nama) },
@@ -348,7 +348,7 @@ function cfgTanaman() {
 function cfgPenanaman() {
   return {
     judul: 'Data Penanaman',
-    tambah: false, ubah: false, hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
     nama: r => namaTanaman(r.tanamanId),
     kolom: [
       { h: 'Tanaman', f: r => esc(namaTanaman(r.tanamanId)) },
@@ -372,7 +372,7 @@ function cfgPenanaman() {
 function cfgPanen() {
   return {
     judul: 'Data Panen',
-    tambah: false, ubah: false, hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
     nama: r => `Panen ${rp(r.kg)} kg`,
     kolom: [
       { h: 'Tanggal', f: r => tgl(r.tanggal) },
@@ -864,7 +864,8 @@ function pageGudang() {
         `${rp(t.jumlah)} ${esc(brg.satuan || '')}`,
         pj ? esc(penanamanLabel(pj)) : (t.laporanId ? 'Laporan #' + esc(t.laporanId) : '-'),
         t.pegawaiId ? esc(namaPegawai(t.pegawaiId)) : '-',
-        esc(t.keterangan)
+        esc(t.keterangan),
+        '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+brg.id+'">Detail barang</button>'
       ];
     }), 'Belum ada transaksi.')}
   </div>`;
