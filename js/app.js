@@ -91,6 +91,7 @@ function menuVisible(m) {
   if (!u) return false;
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
+  if (m.id === 'penanaman' || m.id === 'panen') return true; // Modul kerja lapangan tersedia untuk semua pegawai.
   if (m.id === 'gudang') return true; // Pegawai hanya melihat sisa stok benih.
   return !m.akses || u.akses.includes(m.akses);
 }
@@ -521,7 +522,7 @@ async function namaLokasiGPS(lat, lon) {
 function waktuLokal(d) {
   return d.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'medium' });
 }
-function openLapor() {
+function openLapor(jenisAwal = '') {
   const u = me();
   let capturedBlob = null, capturedAt = null, gps = null;
   const box = $('#modal');
@@ -529,7 +530,7 @@ function openLapor() {
     <div class="modal-head"><h3>Kirim Laporan Harian</h3><button class="icon-btn" type="button" data-tutup>✕</button></div>
     <form id="form-lapor-bukti" class="form-grid">
       <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
-      <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>
+      <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}" ${x===jenisAwal?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
       <label class="field full"><span>Pilih lahan *</span><select name="lahanId" required><option value="">Pilih lahan dari daftar admin</option>${DB.all('lahan').filter(x=>x.aktif!==false).map(x=>'<option value="'+x.id+'">'+esc(x.nama)+' · sisa '+Math.max(0,Number(x.luasTotalM2)-DB.all('laporan').filter(l=>String(l.lahanId)===String(x.id)).reduce((n,l)=>n+Number(l.luasM2||0),0)).toLocaleString('id-ID')+' m²</option>').join('')}</select><small class="muted">Luas total dan nama lahan ditentukan admin.</small></label>
       <label class="field full"><span>Nama tanaman *</span><input name="tanamanNama" maxlength="120" placeholder="Masukkan nama tanaman"></label>
       
@@ -811,6 +812,19 @@ function pageGudang() {
     : '';
   cfg.bawah = bawah;
   return { html: crud('barang', cfg) };
+}
+
+function pagePekerjaan(jenis) {
+  const admin=isAdmin();
+  const rows=DB.all('laporan').filter(l=>l.jenis===jenis).slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  const btn=admin?'':'<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
+  const body=jenis==='Panen'
+    ? tabel(['Tanggal','Pegawai','Lahan','Tanaman','Hasil panen','Kualitas','Status','Detail'],
+      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.panenKg==null?'-':rp(l.panenKg)+' kg',esc(l.kualitasPanen||'-'),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),'Belum ada hasil panen yang dilaporkan.')
+    : tabel(['Tanggal','Pegawai','Lahan','Tanaman','Luas ditanam','Jumlah bibit','Status','Detail'],
+      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),'Belum ada kegiatan penanaman yang dilaporkan.');
+  return {html:head(jenis==='Panen'?'Pencatatan Panen':'Pencatatan Penanaman',btn)+
+    '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+body};
 }
 
 function pageAktivitas() {
@@ -1520,8 +1534,8 @@ const PAGES = {
   dashboard: pageDashboard,
   lahan: () => ({ html: crud('lahan', cfgLahan()) }),
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
-  penanaman: () => ({ html: crud('penanaman', cfgPenanaman()) }),
-  panen: () => ({ html: crud('panen', cfgPanen()) }),
+  penanaman: () => pagePekerjaan('Penanaman'),
+  panen: () => pagePekerjaan('Panen'),
   gudang: pageGudang,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
   aktivitas: pageAktivitas,
@@ -1655,6 +1669,7 @@ function aksiKlik(e) {
     case 'tolakPegawai': return prosesVerifikasiPegawai(id, 'ditolak');
     case 'transaksi': return openTransaksi();
     case 'lapor': return openLapor();
+    case 'laporJenis': return openLapor(b.dataset.jenis);
     case 'absenMasuk': return lakukanAbsensi('masuk');
     case 'absenPulang': return lakukanAbsensi('pulang');
     case 'ajukanIzin': return ajukanIzinPegawai();
