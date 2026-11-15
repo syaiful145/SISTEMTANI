@@ -713,7 +713,12 @@ async function detailLaporan(id) {
     if (!error && data?.signedUrl) fotoHtml = `<img src="${esc(data.signedUrl)}" alt="Foto bukti laporan" style="width:100%;max-height:420px;object-fit:contain;border-radius:12px">`;
     else fotoHtml = '<p class="form-error">Foto bukti gagal dimuat. Periksa izin penyimpanan.</p>';
   }
-  const lokasiFoto = l.fotoLat != null && l.fotoLon != null ? `<p><strong>Nama lokasi foto</strong><br>${esc(l.fotoLokasi || 'Tidak tersedia')}</p><p><strong>Koordinat GPS foto</strong><br>${Number(l.fotoLat).toFixed(6)}, ${Number(l.fotoLon).toFixed(6)} (akurasi ±${Math.round(Number(l.fotoAccuracy || 0))} m)</p><p><strong>Waktu foto</strong><br>${esc(l.fotoCapturedAt ? waktuLokal(new Date(l.fotoCapturedAt)) : '-')}</p>` : '';
+  const koordinatValid = Number.isFinite(Number(l.fotoLat)) && Number.isFinite(Number(l.fotoLon)) && l.fotoLat !== null && l.fotoLon !== null;
+  const latFoto = koordinatValid ? Number(l.fotoLat) : null;
+  const lonFoto = koordinatValid ? Number(l.fotoLon) : null;
+  const mapsUrl = koordinatValid ? `https://www.google.com/maps?q=${encodeURIComponent(latFoto + ',' + lonFoto)}` : '';
+  const mapEmbedUrl = koordinatValid ? `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent((lonFoto - 0.003) + ',' + (latFoto - 0.003) + ',' + (lonFoto + 0.003) + ',' + (latFoto + 0.003))}&layer=mapnik&marker=${encodeURIComponent(latFoto + ',' + lonFoto)}` : '';
+  const lokasiFoto = koordinatValid ? `<p><strong>Nama lokasi foto</strong><br>${esc(l.fotoLokasi || 'Nama alamat belum tersedia')}</p><p><strong>Koordinat GPS foto</strong><br>${latFoto.toFixed(6)}, ${lonFoto.toFixed(6)} (akurasi ±${Math.round(Number(l.fotoAccuracy || 0))} m)</p><p><strong>Waktu foto</strong><br>${esc(l.fotoCapturedAt ? waktuLokal(new Date(l.fotoCapturedAt)) : '-')}</p><h4>Titik Pengambilan Foto</h4><iframe title="Peta lokasi foto" src="${mapEmbedUrl}" loading="lazy" style="width:100%;height:280px;border:0;border-radius:12px" referrerpolicy="no-referrer-when-downgrade"></iframe><div class="form-actions"><a class="btn" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Lihat Titik di Google Maps</a></div>` : '<p class="muted">Titik GPS tidak tersimpan pada laporan ini.</p>';
   openInfo('Detail Laporan Pegawai', `
     <div class="detail-grid">
       <p><strong>Pegawai</strong><br>${esc(namaPegawai(l.pegawaiId))}</p>
