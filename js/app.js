@@ -80,6 +80,7 @@ const MENU = [
   { id: 'gudang', label: 'Gudang', icon: '📦', akses: 'gudang' },
   { id: 'pupuk', label: 'Stok Pupuk', icon: '🧪', adminOnly: true },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
+  { id: 'kelompok', label: 'Kelompok Kerja', icon: '👥' },
   { id: 'aktivitas', label: 'Pekerjaan Lapangan', icon: '📝' },
   { id: 'absensi', label: 'Absensi', icon: '🕒' },
   { id: 'laporan', label: 'Laporan', icon: '📊', adminOnly: true },
@@ -1682,7 +1683,87 @@ function pageAdmins() {
   }};
 }
 
-const PAGES = {
+
+/* ----- Kelompok Kerja ----- */
+function pageKelompok() {
+  const groups = DB.all('kelompok').slice().sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
+  const members = DB.all('anggotaKelompok');
+  const tasks = DB.all('tugasKelompok').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const logs = DB.all('aktivitasTugas').slice().sort((a,b)=>String(b.tanggal||'').localeCompare(String(a.tanggal||'')));
+  const mine = isAdmin() ? groups : groups.filter(g => members.some(m => String(m.kelompokId)===String(g.id) && String(m.pegawaiId)===String(me().id)));
+  const groupCards = mine.map(g => {
+    const gm = members.filter(m=>String(m.kelompokId)===String(g.id));
+    const gt = tasks.filter(t=>String(t.kelompokId)===String(g.id));
+    const memberRows = gm.map(m=>[esc(namaPegawai(m.pegawaiId))]);
+    const taskRows = gt.map(t=>[
+      '<strong>'+esc(t.judul)+'</strong><div class="muted">'+esc(t.jenis)+' · '+esc(t.lahanNama||'Tanpa lahan')+' · Tenggat '+esc(t.tenggat||'-')+'</div><div>'+tagStatus(t.status==='berjalan'?'Dalam perawatan':t.status==='menunggu_verifikasi'?'Menunggu verifikasi':t.status==='selesai'?'Selesai':'Dibatalkan')+'</div>',
+      '<div class="row-actions">'+(isAdmin() && t.status==='menunggu_verifikasi' ? '<button class="btn tiny" data-act="verifikasiTugas" data-id="'+t.id+'" data-status="selesai">Terima</button><button class="btn tiny danger" data-act="verifikasiTugas" data-id="'+t.id+'" data-status="berjalan">Tolak</button>' : '')+(!isAdmin() && t.status==='berjalan' ? '<button class="btn tiny" data-act="catatAktivitasTugas" data-id="'+t.id+'">Catat hari ini</button><button class="btn tiny ghost" data-act="ajukanSelesaiTugas" data-id="'+t.id+'">Ajukan selesai</button>' : '')+'</div>',
+      '<div class="muted">'+logs.filter(l=>String(l.tugasId)===String(t.id)).length+' catatan harian</div>'
+    ]);
+    return '<section class="card"><div class="page-head"><h3>'+esc(g.nama)+'</h3>'+(isAdmin()?'<button class="btn ghost" data-act="tambahAnggotaKelompok" data-id="'+g.id+'">+ Anggota</button>':'')+'</div><p class="muted">'+esc(g.deskripsi||'')+'</p><h4>Anggota ('+gm.length+')</h4>'+tabel(['Pegawai'],memberRows,'Belum ada anggota.')+'<div class="page-head" style="margin-top:18px"><h4>Tugas Kelompok</h4>'+(isAdmin()?'<button class="btn" data-act="buatTugasKelompok" data-id="'+g.id+'">+ Beri Tugas</button>':'')+'</div>'+tabel(['Tugas','Tindakan','Aktivitas'],taskRows,'Belum ada tugas untuk kelompok ini.')+'</section>';
+  }).join('');
+  const pending = tasks.filter(t=>t.status==='menunggu_verifikasi').length;
+  return {html:head('Kelompok Kerja',isAdmin()?'<button class="btn" data-act="buatKelompok">+ Buat Kelompok</button>':'')+
+    '<div class="stats"><div class="stat"><span>Kelompok</span><strong>'+mine.length+'</strong></div><div class="stat"><span>Tugas aktif</span><strong>'+tasks.filter(t=>mine.some(g=>String(g.id)===String(t.kelompokId))&&t.status==='berjalan').length+'</strong></div><div class="stat"><span>Menunggu verifikasi</span><strong>'+ (isAdmin()?pending:tasks.filter(t=>t.status==='menunggu_verifikasi'&&mine.some(g=>String(g.id)===String(t.kelompokId))).length)+'</strong></div></div>'+
+    (groupCards||'<div class="empty">Belum ada kelompok yang tersedia.</div>')+
+    (isAdmin()?'<section class="card"><h3>Verifikasi Tugas</h3><p class="muted">Tugas yang diajukan selesai akan muncul di atas pada kelompok masing-masing.</p></section>':'')};
+}
+async function buatKelompok(){
+  if(!isAdmin())return;
+  const nama=prompt('Nama kelompok baru:'); if(nama===null)return;
+  if(!nama.trim())return alert('Nama kelompok wajib diisi.');
+  const deskripsi=prompt('Deskripsi kelompok (boleh kosong):')||'';
+  try{await DB.add('kelompok',{nama:nama.trim(),deskripsi,aktif:true});await DB.init(true);render();}
+  catch(e){alert('Gagal membuat kelompok: '+e.message);}
+}
+async function tambahAnggotaKelompok(kelompokId){
+  if(!isAdmin())return;
+  const g=DB.get('kelompok',kelompokId); if(!g)return;
+  const available=DB.all('pegawai').filter(p=>p.statusVerifikasi==='disetujui'&&!DB.all('anggotaKelompok').some(m=>String(m.kelompokId)===String(kelompokId)&&String(m.pegawaiId)===String(p.id)));
+  if(!available.length)return alert('Tidak ada pegawai disetujui yang belum menjadi anggota kelompok ini.');
+  const choices=available.map(p=>p.id+' — '+p.nama).join('\n');
+  const chosen=prompt('Masukkan ID pegawai yang akan ditambahkan:\n'+choices);
+  if(chosen===null)return;
+  const p=available.find(x=>String(x.id)===chosen.trim());
+  if(!p)return alert('ID pegawai tidak valid.');
+  try{await DB.add('anggotaKelompok',{kelompokId,pegawaiId:p.id});await DB.init(true);render();}
+  catch(e){alert('Gagal menambahkan anggota: '+e.message);}
+}
+async function buatTugasKelompok(kelompokId){
+  if(!isAdmin())return;
+  const judul=prompt('Judul tugas utama kelompok:');if(judul===null)return;
+  if(!judul.trim())return alert('Judul tugas wajib diisi.');
+  const deskripsi=prompt('Deskripsi/instruksi tugas:')||'';
+  const jenis=prompt('Jenis pekerjaan (Penanaman/Pemupukan/Perawatan/Panen):','Perawatan')||'Perawatan';
+  const lahanNama=prompt('Nama lahan (opsional):')||'';
+  const tanggalMulai=prompt('Tanggal mulai (YYYY-MM-DD):',hariIni())||hariIni();
+  const tenggat=prompt('Tenggat (YYYY-MM-DD, opsional):')||null;
+  if(tenggat&&tenggat<tanggalMulai)return alert('Tenggat tidak boleh sebelum tanggal mulai.');
+  try{await DB.add('tugasKelompok',{kelompokId,judul:judul.trim(),deskripsi,jenis,lahanNama,tanggalMulai,tenggat,status:'berjalan'});await DB.init(true);render();}
+  catch(e){alert('Gagal membuat tugas: '+e.message);}
+}
+async function catatAktivitasTugas(tugasId){
+  const t=DB.get('tugasKelompok',tugasId);if(!t||t.status!=='berjalan')return;
+  const uraian=prompt('Catatan pekerjaan hari ini:');if(uraian===null)return;
+  if(!uraian.trim())return alert('Catatan kegiatan wajib diisi.');
+  const hasil=prompt('Hasil pekerjaan (opsional):')||'';
+  const kendala=prompt('Kendala (opsional):')||'';
+  try{await DB.add('aktivitasTugas',{tugasId,pegawaiId:me().id,tanggal:hariIni(),uraian:uraian.trim(),hasil,kendala});await DB.init(false);render();}
+  catch(e){alert('Gagal menyimpan aktivitas: '+e.message);}
+}
+async function ajukanSelesaiTugas(tugasId){
+  if(!confirm('Ajukan tugas ini untuk diverifikasi Admin?'))return;
+  try{const {error}=await supabaseClient.rpc('pegawai_ajukan_selesai_tugas_kelompok',{p_tugas_id:tugasId});if(error)throw error;await DB.init(false);render();}
+  catch(e){alert('Gagal mengajukan penyelesaian: '+e.message);}
+}
+async function verifikasiTugas(tugasId,status){
+  if(!isAdmin())return;
+  const catatan=status==='berjalan'?prompt('Alasan tugas dikembalikan untuk dilanjutkan:')||'Perlu dilanjutkan.':'';
+  try{await DB.update('tugasKelompok',tugasId,{status,catatanVerifikasi:catatan,diverifikasiOleh:me().authId,diverifikasiAt:new Date().toISOString()});await DB.init(true);render();}
+  catch(e){alert('Gagal memverifikasi tugas: '+e.message);}
+}
+
+\nconst PAGES = {
   dashboard: pageDashboard,
   lahan: () => ({ html: crud('lahan', cfgLahan()) }),
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
@@ -1691,6 +1772,7 @@ const PAGES = {
   gudang: pageGudang,
   pupuk: pagePupuk,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
+  kelompok: pageKelompok,
   aktivitas: pageAktivitas,
   absensi: pageAbsensi,
   laporan: pageLaporan,
@@ -1828,6 +1910,12 @@ function aksiKlik(e) {
     case 'setujuiPegawai': return prosesVerifikasiPegawai(id, 'disetujui');
     case 'tolakPegawai': return prosesVerifikasiPegawai(id, 'ditolak');
     case 'transaksi': return openTransaksi();
+    case 'buatKelompok': return buatKelompok();
+    case 'tambahAnggotaKelompok': return tambahAnggotaKelompok(Number(b.dataset.id));
+    case 'buatTugasKelompok': return buatTugasKelompok(Number(b.dataset.id));
+    case 'catatAktivitasTugas': return catatAktivitasTugas(Number(b.dataset.id));
+    case 'ajukanSelesaiTugas': return ajukanSelesaiTugas(Number(b.dataset.id));
+    case 'verifikasiTugas': return verifikasiTugas(Number(b.dataset.id), b.dataset.status);
     case 'lapor': return openLapor();
     case 'laporJenis': return openLapor(b.dataset.jenis);
     case 'editDraftLaporan': { const d=DB.get('laporanDraft',id); return d ? openLapor(d.data?.jenis || '',id) : alert('Draft tidak ditemukan.'); }
