@@ -405,7 +405,7 @@ function detailBarang(id) {
   const keluar=rows.filter(t=>t.jenis==='Keluar').reduce((n,t)=>n+Number(t.jumlah||0),0);
   openInfo('Detail Barang · '+esc(b.nama),
     '<div class="detail-grid"><p><strong>Kode</strong><br>'+esc(b.kode||'-')+'</p><p><strong>Kategori</strong><br>'+esc(b.kategori||'-')+'</p><p><strong>Stok saat ini</strong><br>'+rp(b.stok)+' '+esc(b.satuan||'')+'</p><p><strong>Total barang masuk tercatat</strong><br>'+rp(masuk)+' '+esc(b.satuan||'')+'</p><p><strong>Total barang keluar tercatat</strong><br>'+rp(keluar)+' '+esc(b.satuan||'')+'</p><p><strong>Batas minimum</strong><br>'+rp(b.minStok)+' '+esc(b.satuan||'')+'</p></div>'+
-    '<div class="row-actions">'+(isAdmin()?'<button class="btn" data-act="transaksiMasuk" data-id="'+b.id+'">+ Catat Barang Masuk</button>':'')+'</div>'+
+    '<div class="row-actions">'+(isAdmin()?'<button class="btn" data-act="transaksiMasuk" data-id="'+b.id+'">+ Barang Masuk</button><button class="btn danger" data-act="transaksiKeluar" data-id="'+b.id+'">− Barang Keluar</button>':'')+'</div>'+
     '<h4>Riwayat barang masuk dan keluar</h4>'+tabel(['Tanggal','Jenis','Jumlah','Pegawai','Keterangan'],rows.map(t=>[tgl(t.tanggal),t.jenis==='Masuk'?'<span class="tag green">Masuk</span>':'<span class="tag red">Keluar</span>',rp(t.jumlah)+' '+esc(b.satuan||''),t.pegawaiId?esc(namaPegawai(t.pegawaiId)):'-',esc(t.keterangan||'-')]),'Belum ada transaksi untuk barang ini.'));
 }
 
@@ -880,7 +880,8 @@ function pageGudang() {
   const totalMasuk=trx.filter(t=>t.jenis==='Masuk').reduce((n,t)=>n+Number(t.jumlah||0),0);
   const totalKeluar=trx.filter(t=>t.jenis==='Keluar').reduce((n,t)=>n+Number(t.jumlah||0),0);
   const bawah = `<div class="card">
-    <div class="page-head"><h3>Riwayat transaksi stok</h3>
+    <div class="alert">Gudang menampilkan stok Bibit, Pupuk, dan Hasil Panen. Hasil panen yang diterima Admin otomatis menambah stok. Pilih tombol Detail pada barang untuk melihat jumlah masuk, jumlah keluar, dan riwayatnya.</div>
+    <div class="page-head"><h3>Riwayat barang masuk dan keluar</h3>
       <div class="page-actions">${bisa('gudang') ? '<button class="btn" data-act="transaksi">+ Catat transaksi</button>' : ''}</div></div>
     <div class="stats-grid"><div class="stat"><span>Total masuk (100 transaksi terbaru)</span><strong>${rp(totalMasuk)}</strong></div><div class="stat"><span>Total keluar (100 transaksi terbaru)</span><strong>${rp(totalKeluar)}</strong></div><div class="stat"><span>Jenis barang</span><strong>${b.length}</strong></div></div>
     ${tabel(['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Penanaman / Laporan', 'Pegawai', 'Keterangan','Detail'], trx.map(t => {
@@ -1804,6 +1805,7 @@ function aksiKlik(e) {
     }
     case 'detailBarang': return detailBarang(id);
     case 'transaksiMasuk': return openTransaksi({barangId:id,jenis:'Masuk'});
+    case 'transaksiKeluar': return openTransaksi({barangId:id,jenis:'Keluar'});
     case 'hapusLaporan': return hapusLaporanAdmin(id);
     case 'hapusRiwayat': return hapusRiwayatAdmin(b.dataset.tbl,id);
     case 'detailLahan': return detailLahan(id);
