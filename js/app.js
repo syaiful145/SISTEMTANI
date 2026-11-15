@@ -298,7 +298,7 @@ function detailLahan(id) {
   const land=DB.get('lahan',id); if(!land)return;
   const reports=DB.all('laporan').filter(l=>String(l.lahanId)===String(id));
   const plantReports=reports.filter(l=>l.jenis==='Penanaman');
-  const used=plantReports.reduce((n,l)=>n+Number(l.luasM2||0),0);
+  const used=plantReports.filter(l=>l.status==='diterima').reduce((n,l)=>n+Number(l.luasM2||0),0);
   const planted=plantReports.reduce((n,l)=>n+Number(l.jumlahDitanam||0),0);
   const crops=[...new Set(plantReports.map(l=>l.tanamanNama).filter(Boolean))];
   const rows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
@@ -545,7 +545,7 @@ function openLapor(jenisAwal = '', draftId = null) {
     <form id="form-lapor-bukti" class="form-grid" novalidate>
       <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
       <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}" ${x===jenisAwal?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
-      <label class="field full"><span>Pilih lahan *</span><select name="lahanId" required><option value="">Pilih lahan dari daftar admin</option>${DB.all('lahan').filter(x=>x.aktif!==false).map(x=>'<option value="'+x.id+'">'+esc(x.nama)+' · sisa '+Math.max(0,Number(x.luasTotalM2)-DB.all('laporan').filter(l=>String(l.lahanId)===String(x.id)).reduce((n,l)=>n+Number(l.luasM2||0),0)).toLocaleString('id-ID')+' m²</option>').join('')}</select><small class="muted">Luas total dan nama lahan ditentukan admin.</small></label>
+      <label class="field full"><span>Pilih lahan *</span><select name="lahanId" required><option value="">Pilih lahan dari daftar admin</option>${DB.all('lahan').filter(x=>x.aktif!==false).map(x=>'<option value="'+x.id+'">'+esc(x.nama)+' · sisa '+Math.max(0,Number(x.luasTotalM2)-DB.all('laporan').filter(l=>String(l.lahanId)===String(x.id)&&l.jenis==='Penanaman'&&l.status==='diterima').reduce((n,l)=>n+Number(l.luasM2||0),0)).toLocaleString('id-ID')+' m²</option>').join('')}</select><small class="muted">Luas total dan nama lahan ditentukan admin.</small></label>
       <label class="field full"><span>Nama tanaman *</span><input name="tanamanNama" maxlength="120" placeholder="Masukkan nama tanaman"></label>
       
       <div class="field" data-work-field="plant"><span>Luas ditanam (m²) *</span><input name="luasM2" type="number" min="0.01" step="0.01" placeholder="Contoh: 25"></div>
