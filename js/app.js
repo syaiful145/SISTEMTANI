@@ -794,7 +794,7 @@ async function resetPasswordPegawai(id) {
     const nomor = nomorWhatsApp(pegawai.telepon);
     const pesanWA = `Halo ${pegawai.nama}, password sementara akun AgriCore Anda: ${temporaryPassword}. Silakan login lalu segera ganti password setelah berhasil masuk.`;
     const tautanWA = nomor
-      ? `https://wa.me/${nomor}?text=${encodeURIComponent(pesanWA)}`
+      ? `https://api.whatsapp.com/send?phone=${nomor}&text=${encodeURIComponent(pesanWA)}`
       : '';
 
     openInfo(`Password sementara · ${pegawai.nama}`, `
