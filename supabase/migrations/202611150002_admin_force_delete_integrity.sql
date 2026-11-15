@@ -35,6 +35,7 @@ begin
     delete from public.laporan where pegawai_id = p_id;
     delete from public.absensi where pegawai_id = p_id;
     delete from public.izin_pegawai where pegawai_id = p_id;
+    delete from public.laporan_draft where pegawai_id = p_id;
     delete from public.penanaman where pegawai_id = p_id;
     delete from public.pegawai where id = p_id;
     return jsonb_build_object('success', true, 'auth_user_id', v_auth_user_id);
