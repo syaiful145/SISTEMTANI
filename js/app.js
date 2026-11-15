@@ -880,24 +880,52 @@ function pageGudang() {
 }
 
 function pagePekerjaan(jenis) {
-  const admin=isAdmin();
-  const rows=DB.all('laporan').filter(l=>l.jenis===jenis && (admin || l.pegawaiId===me().id)).slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
-  const drafts = admin ? [] : DB.all('laporanDraft').filter(d=>String(d.pegawaiId)===String(me().id) && d.data?.jenis===jenis);
-  const draftHtml = drafts.length ? '<h3>Draft '+esc(jenis)+' belum dikirim</h3>' + tabel(['Tanggal','Tanaman','Lahan','Aksi'], drafts.map(d=>[
-    esc(d.data?.tanggal||'-'),esc(d.data?.tanamanNama||'-'),esc((DB.get('lahan',d.data?.lahanId)||{}).nama||'-'),
-    '<div class="row-actions"><button class="btn tiny ghost" data-act="editDraftLaporan" data-id="'+esc(d.id)+'">Edit</button><button class="btn tiny" data-act="kirimDraftLaporan" data-id="'+esc(d.id)+'">Kirim</button><button class="btn tiny ghost" data-act="hapusDraftLaporan" data-id="'+esc(d.id)+'">Hapus</button></div>'
-  ])) : (admin ? '' : '<p class="muted">Belum ada Draft '+esc(jenis)+'.</p>');
-  const btn=admin?'':'<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
-  const body=jenis==='Panen'
-    ? tabel(['Tanggal','Pegawai','Lahan','Tanaman','Hasil panen','Kualitas','Status','Detail'],
-      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.panenKg==null?'-':rp(l.panenKg)+' kg',esc(l.kualitasPanen||'-'),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')]),'Belum ada hasil panen yang dilaporkan.')
-    : tabel(['Tanggal','Pegawai','Lahan','Tanaman','Luas ditanam','Jumlah bibit','Status','Detail'],
-      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')]),'Belum ada kegiatan penanaman yang dilaporkan.');
-  const adminData = admin
-    ? '<section class="card" style="margin-top:22px"><h3>Data '+esc(jenis)+' yang dikelola Admin</h3><p class="muted">Data master ini dapat ditambah dan diubah Admin. Penghapusan hanya tersedia untuk Admin Utama. Laporan kerja pegawai tetap tercatat pada tabel di atas.</p>'+crud(jenis==='Panen'?'panen':'penanaman',jenis==='Panen'?cfgPanen():cfgPenanaman())+'</section>'
+  const admin = isAdmin();
+  const rows = DB.all('laporan')
+    .filter(l => l.jenis === jenis && (admin || l.pegawaiId === me().id))
+    .slice()
+    .sort((a,b) => String(b.tanggal).localeCompare(String(a.tanggal)));
+  const drafts = admin ? [] : DB.all('laporanDraft')
+    .filter(d => String(d.pegawaiId) === String(me().id) && d.data?.jenis === jenis);
+  const draftHtml = drafts.length
+    ? '<h3>Draft '+esc(jenis)+' belum dikirim</h3>' + tabel(['Tanggal','Tanaman','Lahan','Aksi'], drafts.map(d => [
+        esc(d.data?.tanggal || '-'), esc(d.data?.tanamanNama || '-'),
+        esc((DB.get('lahan',d.data?.lahanId)||{}).nama || '-'),
+        '<div class="row-actions"><button class="btn tiny ghost" data-act="editDraftLaporan" data-id="'+esc(d.id)+'">Edit</button><button class="btn tiny" data-act="kirimDraftLaporan" data-id="'+esc(d.id)+'">Kirim</button><button class="btn tiny ghost" data-act="hapusDraftLaporan" data-id="'+esc(d.id)+'">Hapus</button></div>'
+      ]))
+    : (admin ? '' : '<p class="muted">Belum ada Draft '+esc(jenis)+'.</p>');
+  const btn = admin ? '' : '<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
+  const statusAction = l => admin
+    ? (l.status === 'diterima'
+        ? '<button class="btn tiny ghost" data-act="statusLaporan" data-status="belum_diterima" data-id="'+esc(l.id)+'">Batalkan penerimaan</button>'
+        : '<button class="btn tiny" data-act="statusLaporan" data-status="diterima" data-id="'+esc(l.id)+'">Terima laporan</button>')
     : '';
-  return {html:head(jenis==='Panen'?'Pencatatan Panen':'Pencatatan Penanaman',btn)+
-    '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+draftHtml+body+adminData};
+  const rowsHtml = jenis === 'Panen'
+    ? tabel(['Tanggal','Pegawai','Lahan','Tanaman','Hasil panen','Kualitas','Status','Aksi'],
+        rows.map(l => [
+          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)),
+          esc((DB.get('lahan',l.lahanId)||{}).nama || l.lokasi || '-'),
+          esc(l.tanamanNama || '-'), l.panenKg == null ? '-' : rp(l.panenKg)+' kg',
+          esc(l.kualitasPanen || '-'),
+          l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Menunggu</span>',
+          '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+statusAction(l)+(isAdminUtama()?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')+'</div>'
+        ]), 'Belum ada hasil panen yang dilaporkan.')
+    : tabel(['Tanggal','Pegawai','Lahan','Tanaman','Luas ditanam','Jumlah bibit','Status','Aksi'],
+        rows.map(l => [
+          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)),
+          esc((DB.get('lahan',l.lahanId)||{}).nama || l.lokasi || '-'),
+          esc(l.tanamanNama || '-'), l.luasM2 == null ? '-' : rp(l.luasM2)+' m²',
+          l.jumlahDitanam == null ? '-' : rp(l.jumlahDitanam),
+          l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Menunggu</span>',
+          '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+statusAction(l)+(isAdminUtama()?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')+'</div>'
+        ]), 'Belum ada kegiatan penanaman yang dilaporkan.');
+  const intro = jenis === 'Panen'
+    ? 'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya. Admin memeriksa laporan pada daftar yang sama.'
+    : 'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan. Admin memeriksa laporan pada daftar yang sama.';
+  return {
+    html: head(jenis === 'Panen' ? 'Pencatatan Panen' : 'Pencatatan Penanaman', btn) +
+      '<p class="muted">'+intro+'</p>'+draftHtml+rowsHtml
+  };
 }
 
 function pageAktivitas() {
