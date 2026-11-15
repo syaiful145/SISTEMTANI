@@ -793,8 +793,8 @@ function pageAktivitas() {
     const rows = DB.all('laporan').filter(l => l.pegawaiId === u.id).sort((a, b) => b.id - a.id);
     return {
       html: head('Laporan Harian', '<button class="btn" data-act="lapor">+ Kirim Laporan</button>') +
-        tabel(['Tanggal', 'Kegiatan', 'Tanaman', 'Luas', 'Status', 'Detail'],
-          rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
+        tabel(['Tanggal', 'Kegiatan', 'Lahan', 'Tanaman', 'Luas', 'Status', 'Detail'],
+          rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
             l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
             '<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),
           'Belum ada laporan yang dikirim. Gunakan tombol di atas untuk melapor kegiatan di lapangan.')
@@ -803,9 +803,9 @@ function pageAktivitas() {
   const rows = DB.all('laporan').slice().sort((a, b) => b.id - a.id);
   return {
     html: head('Laporan Harian Pegawai') +
-      tabel(['Tanggal', 'Pegawai', 'Kegiatan', 'Tanaman', 'Luas', 'Status', 'Aksi'],
+      tabel(['Tanggal', 'Pegawai', 'Kegiatan', 'Lahan', 'Tanaman', 'Luas', 'Status', 'Aksi'],
         rows.map(l => [
-          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
+          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
           l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
           '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="' + esc(l.id) + '">Detail</button>' +
           (l.status === 'diterima'
@@ -834,8 +834,9 @@ async function detailLaporan(id) {
       <p><strong>Pegawai</strong><br>${esc(namaPegawai(l.pegawaiId))}</p>
       <p><strong>Tanggal</strong><br>${esc(tgl(l.tanggal))}</p>
       <p><strong>Jenis kegiatan</strong><br>${esc(l.jenis)}</p>
-      <p><strong>Lokasi</strong><br>${esc(l.lokasi)}</p>
-      <p><strong>Status</strong><br>${l.status === 'diterima' ? 'Diterima' : 'Belum diterima'}</p>
+      <p><strong>Nama lahan</strong><br>${esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-')}</p>
+      <p><strong>Lokasi lahan</strong><br>${esc((DB.get('lahan',l.lahanId)||{}).lokasi||l.lokasi||'-')}</p>
+      <p><strong>Status laporan</strong><br>${l.status === 'diterima' ? 'Diterima' : 'Belum diterima'}</p>
       <p><strong>Deskripsi pekerjaan</strong><br>${esc(l.deskripsi)}</p>
       <p><strong>Tanaman</strong><br>${esc(l.tanamanNama||'-')}</p>
       <p><strong>Luas dikerjakan</strong><br>${l.luasM2==null?'-':esc(l.luasM2)+' m²'}</p>
