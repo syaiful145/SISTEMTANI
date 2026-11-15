@@ -134,8 +134,11 @@ DROP POLICY IF EXISTS aktivitas_anggota_read ON public.aktivitas_tugas;
 CREATE POLICY aktivitas_anggota_read ON public.aktivitas_tugas
   FOR SELECT TO authenticated
   USING (EXISTS (
-    SELECT 1 FROM public.pegawai pg
-    WHERE pg.id = aktivitas_tugas.pegawai_id
+    SELECT 1
+    FROM public.tugas_kelompok tk
+    JOIN public.anggota_kelompok ak ON ak.kelompok_id = tk.kelompok_id
+    JOIN public.pegawai pg ON pg.id = ak.pegawai_id
+    WHERE tk.id = aktivitas_tugas.tugas_id
       AND pg.auth_user_id = auth.uid()
       AND pg.status_verifikasi = 'disetujui'
   ));
