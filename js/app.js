@@ -1076,6 +1076,9 @@ function aksiKlik(e) {
   }
 }
 
+let AUTH_LOGIN_ROLE = 'pegawai';
+let PASSWORD_RECOVERY_MODE = false;
+
 async function login(e) {
   e.preventDefault();
   const email = $('#l-user').value.trim(), password = $('#l-pass').value;
@@ -1093,9 +1096,17 @@ async function login(e) {
         return;
       }
       await muatPenggunaAuth(data.user);
+      const actualRole = isAdmin() ? 'admin' : 'pegawai';
+      if (actualRole !== AUTH_LOGIN_ROLE) {
+        await supabaseClient.auth.signOut();
+        ACTIVE_USER = null;
+        throw new Error(AUTH_LOGIN_ROLE === 'admin'
+          ? 'Akun ini bukan akun administrator. Pilih Login Pegawai.'
+          : 'Akun ini bukan akun pegawai. Pilih Login Admin.');
+      }
       await DB.init(isAdmin());
     } catch (e) {
-      await supabaseClient.auth.signOut();
+      if (ACTIVE_USER) { await supabaseClient.auth.signOut(); ACTIVE_USER = null; }
       throw e;
     }
     $('#login-form').reset();
@@ -1108,13 +1119,71 @@ async function login(e) {
   }
 }
 
+function pilihJenisLogin(role) {
+  AUTH_LOGIN_ROLE = role;
+  $('#login-admin').classList.toggle('active', role === 'admin');
+  $('#login-pegawai').classList.toggle('active', role === 'pegawai');
+  $('#login-title').textContent = role === 'admin' ? 'Login Administrator' : 'Login Pegawai';
+  $('#login-description').textContent = role === 'admin'
+    ? 'Masuk menggunakan email dan password administrator.'
+    : 'Masuk menggunakan email dan password akun pegawai.';
+  $('#register-access').classList.toggle('hidden', role !== 'pegawai');
+  $('#l-err').textContent = '';
+}
+
+async function kirimLinkResetPassword(e) {
+  e.preventDefault();
+  const email = $('#forgot-email').value.trim();
+  const box = $('#forgot-message');
+  const btn = $('#forgot-form button[type="submit"]');
+  box.textContent = '';
+  if (!email) { box.textContent = 'Masukkan email akun terlebih dahulu.'; return; }
+  btn.disabled = true; btn.textContent = 'Mengirim...';
+  try {
+    const redirectTo = location.origin + location.pathname + '?reset-password=1';
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw error;
+    box.textContent = 'Jika email terdaftar, tautan pemulihan akan dikirim. Periksa kotak masuk dan folder spam.';
+  } catch (err) {
+    box.textContent = err.message || 'Permintaan pemulihan gagal. Coba lagi.';
+  } finally { btn.disabled = false; btn.textContent = 'Kirim Tautan'; }
+}
+
+function tampilkanFormPasswordPemulihan() {
+  PASSWORD_RECOVERY_MODE = true;
+  $('#app').classList.add('hidden');
+  const page = $('#login-page');
+  page.classList.remove('hidden');
+  page.innerHTML = '<div class="login-card"><h1>Buat Password Baru</h1><p class="muted">Masukkan password baru untuk akun SIMTANI Anda.</p>' +
+    '<form id="recovery-form" class="auth-form"><label class="field"><span>Password baru (minimal 8 karakter)</span><input id="recovery-pass" type="password" minlength="8" autocomplete="new-password" required></label>' +
+    '<label class="field"><span>Ulangi password baru</span><input id="recovery-pass2" type="password" minlength="8" autocomplete="new-password" required></label>' +
+    '<p id="recovery-error" class="form-error" role="alert"></p><button class="btn" type="submit">Simpan Password Baru</button></form></div>';
+  $('#recovery-form').onsubmit = async e => {
+    e.preventDefault();
+    const p = $('#recovery-pass').value, p2 = $('#recovery-pass2').value;
+    const box = $('#recovery-error'), btn = $('#recovery-form button[type="submit"]');
+    box.textContent = '';
+    if (p.length < 8 || p !== p2) { box.textContent = p.length < 8 ? 'Password minimal 8 karakter.' : 'Konfirmasi password tidak sama.'; return; }
+    btn.disabled = true; btn.textContent = 'Menyimpan...';
+    try {
+      const { error } = await supabaseClient.auth.updateUser({ password: p, data: { must_change_password: false } });
+      if (error) throw error;
+      PASSWORD_RECOVERY_MODE = false;
+      await supabaseClient.auth.signOut();
+      ACTIVE_USER = null;
+      alert('Password berhasil diperbarui. Silakan login kembali.');
+      location.href = location.origin + location.pathname;
+    } catch (err) { box.textContent = err.message || 'Password gagal diperbarui.'; btn.disabled = false; btn.textContent = 'Simpan Password Baru'; }
+  };
+}
+
 function setAuthMode(mode) {
   const isRegister = mode === 'register';
   $('#login-form').classList.toggle('hidden', isRegister);
   $('#register-form').classList.toggle('hidden', !isRegister);
   $('#login-hint').classList.toggle('hidden', isRegister);
-  $('#show-login').classList.toggle('active', !isRegister);
-  $('#show-register').classList.toggle('active', isRegister);
+  $('#auth-login-area').classList.toggle('hidden', isRegister);
+  $('#register-access').classList.toggle('hidden', isRegister || AUTH_LOGIN_ROLE !== 'pegawai');
   $('#l-err').textContent = '';
   $('#r-msg').textContent = '';
   $('#r-msg').classList.remove('error');
@@ -1186,8 +1255,21 @@ async function daftarPegawai(e) {
 async function init() {
   $('#login-form').onsubmit = login;
   $('#register-form').onsubmit = daftarPegawai;
-  $('#show-login').onclick = () => setAuthMode('login');
+  $('#login-admin').onclick = () => pilihJenisLogin('admin');
+  $('#login-pegawai').onclick = () => pilihJenisLogin('pegawai');
   $('#show-register').onclick = () => setAuthMode('register');
+  $('#show-login').onclick = () => setAuthMode('login');
+  $('#forgot-form').onsubmit = kirimLinkResetPassword;
+  $('#show-forgot').onclick = () => {
+    $('#auth-login-area').classList.add('hidden');
+    $('#forgot-area').classList.remove('hidden');
+    $('#forgot-email').value = $('#l-user').value.trim();
+    $('#forgot-message').textContent = '';
+  };
+  $('#back-login').onclick = () => {
+    $('#forgot-area').classList.add('hidden');
+    $('#auth-login-area').classList.remove('hidden');
+  };
   $('#logout').onclick = async () => {
     try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); }
     ACTIVE_USER = null;
@@ -1208,6 +1290,13 @@ async function init() {
     render();
   });
   window.addEventListener('hashchange', render);
+  supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') tampilkanFormPasswordPemulihan();
+  });
+  if (new URLSearchParams(location.search).get('reset-password') === '1') {
+    const { data: { session: recoverySession } } = await supabaseClient.auth.getSession();
+    if (recoverySession) { tampilkanFormPasswordPemulihan(); return; }
+  }
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
