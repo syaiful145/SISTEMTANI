@@ -805,7 +805,7 @@ let ATT_HISTORY_YEAR = '';
 let ATT_HISTORY_MONTH = '';
 
 function detailRiwayatAbsensi(id){
-  const a=DB.get('absensi',id);if(!a)return;
+  const a=DB.all('absensi').find(x=>String(x.id)===String(id));if(!a)return;
   const lokasi=(label,alamat,lat,lon,kind)=>{
     const ok=Number.isFinite(Number(lat))&&Number.isFinite(Number(lon))&&lat!==null&&lon!==null;
     return '<p><strong>'+label+'</strong><br>'+esc(alamat||'-')+(ok?'<br><a href="https://www.google.com/maps?q='+encodeURIComponent(lat+','+lon)+'" target="_blank" rel="noopener">Lihat titik lokasi</a>':'')+'</p>';
@@ -1526,7 +1526,7 @@ function aksiKlik(e) {
     case 'prosesIzin': return prosesIzinPegawai(id,b.dataset.status);
     case 'lihatBuktiIzin': return lihatBuktiIzin(id);
     case 'lihatFotoAbsensi': return lihatFotoAbsensi(id,b.dataset.kind);
-    case 'detailRiwayatAbsensi': return detailRiwayatAbsensi(id);
+    case 'detailRiwayatAbsensi': return detailRiwayatAbsensi(b.dataset.id);
     case 'detailLaporan': return detailLaporan(id);
     case 'statusLaporan': {
       const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
