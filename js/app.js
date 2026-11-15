@@ -421,33 +421,126 @@ function openTransaksi() {
 }
 
 /* ----- Laporan harian pegawai ----- */
+let LAPOR_CAMERA_STREAM = null;
+function stopLaporCamera() {
+  if (LAPOR_CAMERA_STREAM) LAPOR_CAMERA_STREAM.getTracks().forEach(track => track.stop());
+  LAPOR_CAMERA_STREAM = null;
+}
+function waktuLokal(d) {
+  return d.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'medium' });
+}
 function openLapor() {
   const u = me();
-  openModal('Kirim Laporan Harian', [
-    { name: 'tanggal', label: 'Tanggal kegiatan', type: 'date', req: true, def: hariIni() },
-    { name: 'jenis', label: 'Jenis kegiatan', type: 'select', options: JENIS_KEGIATAN, req: true },
-    { name: 'lokasi', label: 'Lokasi lahan', req: true },
-    { name: 'deskripsi', label: 'Deskripsi kegiatan', type: 'textarea', req: true, full: true },
-    { name: 'foto', label: 'Foto bukti kegiatan (wajib, maks. 5 MB)', type: 'file', req: true, full: true }
-  ], {}, async data => {
-    const file = data.foto;
-    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return 'Unggah foto JPG, PNG, atau WEBP sebagai bukti kegiatan.';
-    if (file.size > 5 * 1024 * 1024) return 'Ukuran foto maksimal 5 MB.';
-    const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' })[file.type];
-    const path = `${u.authId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, file, { contentType: file.type, upsert: false });
-    if (uploadError) throw new Error('Gagal mengunggah foto bukti: ' + uploadError.message);
+  let capturedBlob = null, capturedAt = null, gps = null;
+  const box = $('#modal');
+  box.innerHTML = `<div class="modal-box">
+    <div class="modal-head"><h3>Kirim Laporan Harian</h3><button class="icon-btn" type="button" data-tutup>✕</button></div>
+    <form id="form-lapor-bukti" class="form-grid">
+      <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
+      <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>
+      <label class="field full"><span>Lokasi lahan *</span><input name="lokasi" required></label>
+      <label class="field full"><span>Deskripsi kegiatan *</span><textarea name="deskripsi" rows="3" required></textarea></label>
+      <div class="field full">
+        <span>Foto langsung dari kamera (wajib)</span>
+        <video id="lapor-video" autoplay playsinline muted style="width:100%;max-height:320px;background:#111;border-radius:12px;display:none"></video>
+        <canvas id="lapor-canvas" style="width:100%;max-height:320px;display:none;border-radius:12px"></canvas>
+        <p id="lapor-camera-info" class="muted">Buka kamera dan izinkan akses kamera serta lokasi saat diminta.</p>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="lapor-buka-kamera">Buka Kamera</button>
+          <button type="button" class="btn" id="lapor-ambil-foto" disabled>Ambil Foto</button>
+          <button type="button" class="btn ghost" id="lapor-ulang-foto" style="display:none">Ulangi Foto</button>
+        </div>
+        <p class="muted" id="lapor-gps-info">Lokasi GPS belum diambil.</p>
+      </div>
+      <p class="form-error full" id="lapor-error"></p>
+      <div class="form-actions full"><button type="button" class="btn ghost" data-tutup>Batal</button><button type="submit" class="btn">Kirim Laporan</button></div>
+    </form></div>`;
+  box.classList.remove('hidden');
+  const close = () => { stopLaporCamera(); tutupModal(); };
+  box.querySelectorAll('[data-tutup]').forEach(x => x.onclick = close);
+  const video = $('#lapor-video'), canvas = $('#lapor-canvas');
+  const info = $('#lapor-camera-info'), gpsInfo = $('#lapor-gps-info'), errBox = $('#lapor-error');
+  $('#lapor-buka-kamera').onclick = async () => {
+    errBox.textContent = '';
     try {
-      await DB.add('laporan', { pegawaiId: u.id, tanggal: data.tanggal, jenis: data.jenis, lokasi: data.lokasi, deskripsi: data.deskripsi, fotoPath: path, status: 'belum_diterima', dibaca: false });
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Kamera tidak didukung. Buka web melalui HTTPS dan browser terbaru.');
+      stopLaporCamera();
+      LAPOR_CAMERA_STREAM = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      video.srcObject = LAPOR_CAMERA_STREAM;
+      video.style.display = 'block'; canvas.style.display = 'none';
+      $('#lapor-ambil-foto').disabled = false;
+      info.textContent = 'Kamera aktif. Pastikan objek kegiatan terlihat jelas.';
+    } catch (e) { errBox.textContent = 'Tidak bisa membuka kamera: ' + e.message; }
+  };
+  $('#lapor-ambil-foto').onclick = () => {
+    errBox.textContent = '';
+    if (!video.videoWidth) { errBox.textContent = 'Tunggu sampai kamera siap.'; return; }
+    $('#lapor-ambil-foto').disabled = true;
+    info.textContent = 'Mengambil lokasi GPS... Izinkan akses lokasi jika diminta.';
+    if (!navigator.geolocation) { errBox.textContent = 'Browser tidak mendukung lokasi GPS.'; $('#lapor-ambil-foto').disabled = false; return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      gps = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
+      capturedAt = new Date();
+      const w = video.videoWidth, h = video.videoHeight;
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      const band = Math.max(100, Math.round(h * 0.16));
+      ctx.fillStyle = 'rgba(0,0,0,0.68)'; ctx.fillRect(0, h - band, w, band);
+      const scale = Math.max(18, Math.round(w / 42));
+      ctx.fillStyle = '#fff'; ctx.font = `bold ${scale}px sans-serif`;
+      ctx.fillText(waktuLokal(capturedAt), Math.round(w * 0.025), h - band + scale * 1.5);
+      ctx.font = `${Math.max(14, Math.round(scale * 0.78))}px sans-serif`;
+      ctx.fillText(`GPS: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} (±${Math.round(gps.accuracy)} m)`, Math.round(w * 0.025), h - band + scale * 2.8);
+      canvas.toBlob(blob => {
+        if (!blob) { errBox.textContent = 'Gagal memproses foto.'; $('#lapor-ambil-foto').disabled = false; return; }
+        capturedBlob = blob;
+        video.style.display = 'none'; canvas.style.display = 'block';
+        stopLaporCamera();
+        info.textContent = 'Foto berhasil diambil dengan cap waktu dan lokasi.';
+        gpsInfo.textContent = `Lokasi: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} · Akurasi ±${Math.round(gps.accuracy)} meter · ${waktuLokal(capturedAt)}`;
+        $('#lapor-ulang-foto').style.display = 'inline-flex';
+      }, 'image/jpeg', 0.88);
+    }, e => {
+      errBox.textContent = 'Lokasi tidak berhasil diambil: ' + e.message + '. Aktifkan izin lokasi lalu coba lagi.';
+      info.textContent = 'Foto belum diambil.';
+      $('#lapor-ambil-foto').disabled = false;
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+  $('#lapor-ulang-foto').onclick = () => {
+    capturedBlob = null; capturedAt = null; gps = null;
+    canvas.style.display = 'none'; video.style.display = 'none';
+    $('#lapor-ulang-foto').style.display = 'none';
+    gpsInfo.textContent = 'Lokasi GPS belum diambil.';
+    info.textContent = 'Buka kamera untuk mengambil foto baru.';
+    $('#lapor-ambil-foto').disabled = true;
+    $('#lapor-buka-kamera').click();
+  };
+  $('#form-lapor-bukti').onsubmit = async e => {
+    e.preventDefault(); errBox.textContent = '';
+    const form = e.currentTarget, submit = form.querySelector('button[type="submit"]');
+    if (!capturedBlob || !gps || !capturedAt) { errBox.textContent = 'Wajib ambil foto langsung dari kamera beserta lokasi GPS.'; return; }
+    if (capturedBlob.size > 5 * 1024 * 1024) { errBox.textContent = 'Ukuran foto melebihi 5 MB.'; return; }
+    submit.disabled = true; submit.textContent = 'Mengirim...';
+    const data = { tanggal: form.elements.tanggal.value, jenis: form.elements.jenis.value, lokasi: form.elements.lokasi.value.trim(), deskripsi: form.elements.deskripsi.value.trim() };
+    const path = `${u.authId}/${Date.now()}-${crypto.randomUUID()}.jpg`;
+    try {
+      const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
+      if (uploadError) throw uploadError;
+      try {
+        await DB.add('laporan', { pegawaiId: u.id, ...data, fotoPath: path, fotoLat: gps.lat, fotoLon: gps.lon, fotoAccuracy: gps.accuracy, fotoCapturedAt: capturedAt.toISOString(), status: 'belum_diterima', dibaca: false });
+      } catch (error) {
+        await supabaseClient.storage.from('laporan-bukti').remove([path]); throw error;
+      }
+      await catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
+      close(); render();
     } catch (error) {
-      await supabaseClient.storage.from('laporan-bukti').remove([path]);
-      throw error;
+      errBox.textContent = 'Gagal mengirim laporan: ' + error.message;
+      submit.disabled = false; submit.textContent = 'Kirim Laporan';
     }
-    await catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
-    return null;
-  });
+  };
 }
-
+ 
 /* ----- Riwayat pegawai ----- */
 function riwayatPegawai(id) {
   const p = DB.get('pegawai', id);
@@ -596,6 +689,7 @@ async function detailLaporan(id) {
     if (!error && data?.signedUrl) fotoHtml = `<img src="${esc(data.signedUrl)}" alt="Foto bukti laporan" style="width:100%;max-height:420px;object-fit:contain;border-radius:12px">`;
     else fotoHtml = '<p class="form-error">Foto bukti gagal dimuat. Periksa izin penyimpanan.</p>';
   }
+  const lokasiFoto = l.fotoLat != null && l.fotoLon != null ? `<p><strong>Lokasi GPS foto</strong><br>${Number(l.fotoLat).toFixed(6)}, ${Number(l.fotoLon).toFixed(6)} (akurasi ±${Math.round(Number(l.fotoAccuracy || 0))} m)</p><p><strong>Waktu foto</strong><br>${esc(l.fotoCapturedAt ? waktuLokal(new Date(l.fotoCapturedAt)) : '-')}</p>` : '';
   openInfo('Detail Laporan Pegawai', `
     <div class="detail-grid">
       <p><strong>Pegawai</strong><br>${esc(namaPegawai(l.pegawaiId))}</p>
@@ -604,6 +698,7 @@ async function detailLaporan(id) {
       <p><strong>Lokasi</strong><br>${esc(l.lokasi)}</p>
       <p><strong>Status</strong><br>${l.status === 'diterima' ? 'Diterima' : 'Belum diterima'}</p>
       <p><strong>Deskripsi</strong><br>${esc(l.deskripsi)}</p>
+      ${lokasiFoto}
     </div>
     <h4>Foto Bukti Kegiatan</h4>${fotoHtml}
     <div class="form-actions"><button class="btn" data-tutup>Tutup</button></div>`);
