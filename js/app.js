@@ -486,42 +486,52 @@ function openLapor() {
       info.textContent = 'Kamera aktif. Pastikan objek kegiatan terlihat jelas.';
     } catch (e) { errBox.textContent = 'Tidak bisa membuka kamera: ' + e.message; }
   };
-  $('#lapor-ambil-foto').onclick = () => {
+  $('#lapor-ambil-foto').onclick = async () => {
     errBox.textContent = '';
     if (!video.videoWidth) { errBox.textContent = 'Tunggu sampai kamera siap.'; return; }
     $('#lapor-ambil-foto').disabled = true;
-    info.textContent = 'Mengambil lokasi GPS... Izinkan akses lokasi jika diminta.';
+    info.textContent = 'Mengambil GPS dan mencari nama alamat...';
     if (!navigator.geolocation) { errBox.textContent = 'Browser tidak mendukung lokasi GPS.'; $('#lapor-ambil-foto').disabled = false; return; }
-    navigator.geolocation.getCurrentPosition(pos => {
-      gps = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
-      capturedAt = new Date();
-      const w = video.videoWidth, h = video.videoHeight;
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, w, h);
-      const band = Math.max(150, Math.round(h * 0.23));
-      ctx.fillStyle = 'rgba(0,0,0,0.68)'; ctx.fillRect(0, h - band, w, band);
-      const scale = Math.max(18, Math.round(w / 42));
-      ctx.fillStyle = '#fff'; ctx.font = `bold ${scale}px sans-serif`;
-      ctx.fillText(waktuLokal(capturedAt), Math.round(w * 0.025), h - band + scale * 1.5);
-      ctx.font = `${Math.max(14, Math.round(scale * 0.78))}px sans-serif`;
-      ctx.fillText(`GPS: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} (±${Math.round(gps.accuracy)} m)`, Math.round(w * 0.025), h - band + scale * 2.8);
-      canvas.toBlob(blob => {
-        if (!blob) { errBox.textContent = 'Gagal memproses foto.'; $('#lapor-ambil-foto').disabled = false; return; }
-        capturedBlob = blob;
-        video.style.display = 'none'; canvas.style.display = 'block';
-        stopLaporCamera();
-        info.textContent = 'Foto berhasil diambil dengan cap waktu dan lokasi.';
-        gpsInfo.textContent = `Nama lokasi: ${gps.place} · Koordinat: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} · Akurasi ±${Math.round(gps.accuracy)} meter · ${waktuLokal(capturedAt)}`;
-        $('#lapor-ulang-foto').style.display = 'inline-flex';
-      }, 'image/jpeg', 0.88);
+    navigator.geolocation.getCurrentPosition(async pos => {
+      try {
+        gps = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        gps.place = await namaLokasiGPS(gps.lat, gps.lon);
+        capturedAt = new Date();
+        const w = video.videoWidth, h = video.videoHeight;
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, w, h);
+        const band = Math.max(190, Math.round(h * 0.30));
+        ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, h - band, w, band);
+        const scale = Math.max(18, Math.round(w / 42));
+        ctx.fillStyle = '#fff'; ctx.font = `bold ${scale}px sans-serif`;
+        ctx.fillText(waktuLokal(capturedAt), Math.round(w * 0.025), h - band + scale * 1.35);
+        ctx.font = `${Math.max(14, Math.round(scale * 0.78))}px sans-serif`;
+        const maxChars = Math.max(30, Math.floor(w / (scale * 0.48)));
+        const placeLines = (gps.place || 'Nama alamat tidak ditemukan').match(new RegExp('.{1,' + maxChars + '}(?:\\\\s|$)', 'g')) || [gps.place || 'Nama alamat tidak ditemukan'];
+        let y = h - band + scale * 2.45;
+        for (const line of placeLines.slice(0, 2)) { ctx.fillText(line.trim(), Math.round(w * 0.025), y); y += scale * 1.05; }
+        ctx.fillText(`GPS: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} (±${Math.round(gps.accuracy)} m)`, Math.round(w * 0.025), h - scale * 0.55);
+        canvas.toBlob(blob => {
+          if (!blob) { errBox.textContent = 'Gagal memproses foto.'; $('#lapor-ambil-foto').disabled = false; return; }
+          capturedBlob = blob;
+          video.style.display = 'none'; canvas.style.display = 'block';
+          stopLaporCamera();
+          info.textContent = 'Foto berhasil diambil dengan cap waktu, nama alamat, dan GPS.';
+          gpsInfo.textContent = `Nama lokasi: ${gps.place} · Koordinat: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} · Akurasi ±${Math.round(gps.accuracy)} meter · ${waktuLokal(capturedAt)}`;
+          $('#lapor-ulang-foto').style.display = 'inline-flex';
+        }, 'image/jpeg', 0.88);
+      } catch (error) {
+        errBox.textContent = 'Gagal mengambil foto: ' + error.message;
+        $('#lapor-ambil-foto').disabled = false;
+      }
     }, e => {
       errBox.textContent = 'Lokasi tidak berhasil diambil: ' + e.message + '. Aktifkan izin lokasi lalu coba lagi.';
       info.textContent = 'Foto belum diambil.';
       $('#lapor-ambil-foto').disabled = false;
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
-  $('#lapor-ulang-foto').onclick = () => {
+$('#lapor-ulang-foto').onclick = () => {
     capturedBlob = null; capturedAt = null; gps = null;
     canvas.style.display = 'none'; video.style.display = 'none';
     $('#lapor-ulang-foto').style.display = 'none';
