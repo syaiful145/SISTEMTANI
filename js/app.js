@@ -816,7 +816,7 @@ async function resetPasswordPegawai(id) {
         ? `<p><a class="btn ghost" href="${esc(tautanWA)}" target="_blank" rel="noopener noreferrer">Buka WhatsApp dengan pesan</a></p>
            <p class="muted">Jika teks tidak muncul di WhatsApp, salin pesan berikut dan tempel ke chat pegawai:</p>
            <p><textarea readonly rows="4" style="width:100%">${esc(pesanWA)}</textarea></p>
-           <button class="btn" data-act="salinPassword" data-password="${esc(temporaryPassword)}">Salin password</button>`
+
         : '<p class="muted">Nomor WhatsApp belum valid. Sampaikan password sementara secara langsung melalui cara yang aman.</p>'}
       <p class="muted">Pegawai harus mengganti password setelah login.</p>
     `);
