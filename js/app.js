@@ -912,21 +912,39 @@ function detailRiwayatAbsensi(id){
     (a.pulangFotoPath?'<button class="btn tiny" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Foto Pulang</button>':'')+'</div>');
 }
 
+let ATT_ARCHIVE_YEAR = '';
+let ATT_ARCHIVE_MONTH = '';
+let ATT_ARCHIVE_DAY = '';
+
 function arsipAbsensiBertingkat(rows){
-  const byYear={};
-  rows.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))).forEach(a=>{
-    const y=String(a.tanggal).slice(0,4),m=String(a.tanggal).slice(5,7);
-    (byYear[y]??={})[m]??=[];
-    byYear[y][m].push(a);
-  });
-  return Object.entries(byYear).sort((a,b)=>b[0].localeCompare(a[0])).map(([year,months])=>
-    '<details class="card"><summary><strong>Tahun '+esc(year)+'</strong></summary>'+
-    Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([month,days])=>
-      '<details><summary>'+new Date(year+'-'+month+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'})+' ('+days.length+' hari)</summary>'+
-      '<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Pegawai</th><th>Masuk</th><th>Pulang</th><th>Detail</th></tr></thead><tbody>'+
-      days.map(a=>'<tr><td>'+new Date(a.tanggal+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</td><td>'+esc(namaPegawai(a.pegawaiId))+'</td><td>'+(a.masukAt?waktuLokal(new Date(a.masukAt)):'-')+'</td><td>'+(a.pulangAt?waktuLokal(new Date(a.pulangAt)):'-')+'</td><td><button class="btn tiny ghost" data-act="detailRiwayatAbsensi" data-id="'+a.id+'">Detail</button></td></tr>').join('')+
-      '</tbody></table></div></details>').join('')+'</details>'
-  ).join('')||'<p class="muted">Belum ada riwayat absensi.</p>';
+  const sorted=rows.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  const years=[...new Set(sorted.map(a=>String(a.tanggal).slice(0,4)))].sort((a,b)=>b.localeCompare(a));
+  const btn=(act,value,label)=>'<button class="btn ghost" data-act="'+act+'" data-value="'+esc(value)+'">'+label+'</button>';
+  if(!ATT_ARCHIVE_YEAR || !years.includes(ATT_ARCHIVE_YEAR)){
+    ATT_ARCHIVE_YEAR='';
+    return '<section class="card"><h3>Pilih Tahun</h3>'+
+      (years.length?years.map(y=>'<div class="row-actions">'+btn('arsipAbsensiYear',y,'Tahun '+esc(y)+' · Detail')+'</div>').join(''):'<p class="muted">Belum ada riwayat absensi.</p>')+'</section>';
+  }
+  const yearRows=sorted.filter(a=>String(a.tanggal).startsWith(ATT_ARCHIVE_YEAR+'-'));
+  const months=[...new Set(yearRows.map(a=>String(a.tanggal).slice(5,7)))].sort((a,b)=>b.localeCompare(a));
+  if(!ATT_ARCHIVE_MONTH || !months.includes(ATT_ARCHIVE_MONTH)){
+    ATT_ARCHIVE_MONTH='';
+    return '<section class="card"><div class="row-actions">'+btn('arsipAbsensiBackYear','','‹ Kembali ke Tahun')+'</div><h3>Tahun '+esc(ATT_ARCHIVE_YEAR)+'</h3><h4>Pilih Bulan</h4>'+
+      months.map(m=>'<div class="row-actions">'+btn('arsipAbsensiMonth',m,new Date(ATT_ARCHIVE_YEAR+'-'+m+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'})+' · Detail')+'</div>').join('')+'</section>';
+  }
+  const monthRows=yearRows.filter(a=>String(a.tanggal).slice(5,7)===ATT_ARCHIVE_MONTH);
+  const days=[...new Set(monthRows.map(a=>a.tanggal))].sort((a,b)=>b.localeCompare(a));
+  if(!ATT_ARCHIVE_DAY || !days.includes(ATT_ARCHIVE_DAY)){
+    ATT_ARCHIVE_DAY='';
+    return '<section class="card"><div class="row-actions">'+btn('arsipAbsensiBackMonth','','‹ Kembali ke Bulan')+'</div><h3>'+new Date(ATT_ARCHIVE_YEAR+'-'+ATT_ARCHIVE_MONTH+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long',year:'numeric'})+'</h3><h4>Pilih Hari</h4>'+
+      days.map(d=>'<div class="row-actions">'+btn('arsipAbsensiDay',d,new Date(d+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})+' · '+monthRows.filter(a=>a.tanggal===d).length+' pegawai · Detail')+'</div>').join('')+'</section>';
+  }
+  const dayRows=monthRows.filter(a=>a.tanggal===ATT_ARCHIVE_DAY).sort((a,b)=>namaPegawai(a.pegawaiId).localeCompare(namaPegawai(b.pegawaiId)));
+  return '<section class="card"><div class="row-actions">'+btn('arsipAbsensiBackDay','','‹ Kembali ke Hari')+'</div><h3>Absensi '+new Date(ATT_ARCHIVE_DAY+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</h3>'+
+    '<p class="muted">Total '+dayRows.length+' data pegawai pada tanggal ini.</p>'+
+    tabel(['Pegawai','Masuk','Pulang','Foto Masuk','Foto Pulang','Detail'],
+      dayRows.map(a=>[esc(namaPegawai(a.pegawaiId)),a.masukAt?waktuLokal(new Date(a.masukAt)):'-',a.pulangAt?waktuLokal(new Date(a.pulangAt)):'-',a.masukFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="masuk" data-id="'+a.id+'">Lihat</button>':'-',a.pulangFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Lihat</button>':'-','<button class="btn tiny ghost" data-act="detailRiwayatAbsensi" data-id="'+a.id+'">Detail</button>']),
+      'Belum ada data absensi pada hari ini.')+'</section>';
 }
 
 function pageAbsensi(){
@@ -1617,6 +1635,12 @@ function aksiKlik(e) {
     case 'lihatBuktiIzin': return lihatBuktiIzin(id);
     case 'lihatFotoAbsensi': return lihatFotoAbsensi(id,b.dataset.kind);
     case 'detailRiwayatAbsensi': return detailRiwayatAbsensi(b.dataset.id);
+    case 'arsipAbsensiYear': ATT_ARCHIVE_YEAR=b.dataset.value; ATT_ARCHIVE_MONTH=''; ATT_ARCHIVE_DAY=''; return render();
+    case 'arsipAbsensiMonth': ATT_ARCHIVE_MONTH=b.dataset.value; ATT_ARCHIVE_DAY=''; return render();
+    case 'arsipAbsensiDay': ATT_ARCHIVE_DAY=b.dataset.value; return render();
+    case 'arsipAbsensiBackYear': ATT_ARCHIVE_YEAR=''; ATT_ARCHIVE_MONTH=''; ATT_ARCHIVE_DAY=''; return render();
+    case 'arsipAbsensiBackMonth': ATT_ARCHIVE_MONTH=''; ATT_ARCHIVE_DAY=''; return render();
+    case 'arsipAbsensiBackDay': ATT_ARCHIVE_DAY=''; return render();
     case 'detailLaporan': return detailLaporan(id);
     case 'statusLaporan': {
       const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
