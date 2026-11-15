@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
 
     const { error: updateError } = await adminClient.auth.admin.updateUserById(pegawai.auth_user_id, {
       password: temporaryPassword,
+      user_metadata: { must_change_password: true },
     });
     if (updateError) throw updateError;
 
