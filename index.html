@@ -33,6 +33,24 @@
           <button type="button" class="btn ghost register-toggle" id="show-register">Daftar Pegawai</button>
         </div>
       </div>
+      <div id="register-area" class="hidden">
+        <h2 class="forgot-title">Pendaftaran Pegawai</h2>
+        <p class="muted">Lengkapi data untuk mengajukan akun pegawai.</p>
+        <form id="register-form" class="auth-form" autocomplete="on">
+          <label class="field"><span>Nama lengkap</span><input id="r-nama" autocomplete="name" required></label>
+          <label class="field"><span>ID pegawai</span><input id="r-id" required></label>
+          <label class="field"><span>Username</span><input id="r-username" autocomplete="username" required></label>
+          <label class="field"><span>Email aktif</span><input id="r-email" type="email" autocomplete="email" required></label>
+          <label class="field"><span>Jabatan</span><input id="r-jabatan" required></label>
+          <label class="field"><span>Nomor WhatsApp</span><input id="r-telepon" type="tel" autocomplete="tel" required></label>
+          <label class="field"><span>Alamat</span><input id="r-alamat" autocomplete="street-address" required></label>
+          <label class="field"><span>Password (minimal 8 karakter)</span><input id="r-pass" type="password" minlength="8" autocomplete="new-password" required></label>
+          <label class="field"><span>Ulangi password</span><input id="r-pass2" type="password" minlength="8" autocomplete="new-password" required></label>
+          <p id="r-msg" class="form-message" role="status"></p>
+          <button class="btn login-submit" type="submit">Kirim Pendaftaran</button>
+          <button class="btn ghost register-toggle" id="back-to-login" type="button">Kembali ke Login</button>
+        </form>
+      </div>
       <div id="forgot-area" class="hidden">
         <h2 class="forgot-title">Lupa Password</h2>
         <p class="muted">Kami akan mengirim tautan pemulihan ke email akun Anda.</p>
