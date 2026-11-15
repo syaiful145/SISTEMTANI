@@ -912,7 +912,7 @@ function pagePekerjaan(jenis) {
   const btn = admin ? '' : '<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
   const statusAction = l => admin
     ? (l.status === 'diterima'
-        ? '<button class="btn tiny ghost" data-act="statusLaporan" data-status="belum_diterima" data-id="'+esc(l.id)+'">Batalkan penerimaan</button>'
+        ? '<span class="tag green">Sudah diterima</span>'
         : '<button class="btn tiny" data-act="statusLaporan" data-status="diterima" data-id="'+esc(l.id)+'">Terima laporan</button>')
     : '';
   const rowsHtml = jenis === 'Panen'
@@ -1834,8 +1834,14 @@ function aksiKlik(e) {
     case 'arsipAbsensiBackDay': ATT_ARCHIVE_DAY=''; return render();
     case 'detailLaporan': return detailLaporan(id);
     case 'statusLaporan': {
-      const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
-      DB.update('laporan', id, { status }).then(() => { catat('Ubah status laporan', status === 'diterima' ? 'Diterima' : 'Belum diterima'); render(); }).catch(err => alert(err.message));
+      const laporan = DB.get('laporan', id);
+      if (!laporan) { alert('Laporan tidak ditemukan.'); return; }
+      if (laporan.status === 'diterima') { alert('Laporan ini sudah diterima. Status dikunci agar stok dan riwayat gudang tidak berubah dua kali.'); return; }
+      if (b.dataset.status !== 'diterima') return;
+      DB.update('laporan', id, { status: 'diterima' }).then(() => {
+        catat('Ubah status laporan', 'Diterima');
+        return DB.init(true);
+      }).then(() => render()).catch(err => alert('Laporan belum dapat diterima: ' + err.message));
       return;
     }
     case 'kal': geserKal(Number(b.dataset.d)); return render();
