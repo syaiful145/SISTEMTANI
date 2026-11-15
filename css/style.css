@@ -443,3 +443,25 @@ tr:last-child td { border-bottom: none; }
   .detail-actions { flex-direction: column; }
   .detail-actions .btn { width: 100%; }
 }
+
+
+/* ===== SIMTANI modern authentication ===== */
+.login-card-modern { width: min(100% - 32px, 440px); padding: 34px; border-radius: 20px; box-shadow: 0 18px 55px rgba(21,55,34,.12); }
+.login-brand-mark { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 14px; border-radius: 18px; background: var(--hijau-muda); font-size: 30px; }
+.login-eyebrow { text-align: center; font-size: 10px; letter-spacing: 1.4px; font-weight: 800; color: var(--hijau); margin: 0 0 8px; }
+.login-card-modern h1, .login-card-modern > .muted { text-align: center; }
+.login-card-modern h1 { margin: 0 0 8px; }
+.login-role-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 5px; background: #f1f5f1; border-radius: 12px; margin: 24px 0 20px; }
+.login-role { border: 1px solid transparent; border-radius: 9px; background: transparent; padding: 12px 8px; font: inherit; font-weight: 700; color: var(--abu); cursor: pointer; }
+.login-role.active { background: #fff; border-color: var(--garis); color: var(--hijau); box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.auth-form { display: grid; gap: 14px; }
+.auth-form .field input { width: 100%; }
+.login-inline { display: flex; justify-content: flex-end; margin-top: -5px; }
+.text-link { border: 0; background: none; color: var(--hijau); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 2px 0; }
+.login-submit { width: 100%; min-height: 46px; }
+.login-separator { display: flex; align-items: center; gap: 10px; color: var(--abu); font-size: 12px; margin: 20px 0 12px; }
+.login-separator:before, .login-separator:after { content: ""; flex: 1; height: 1px; background: var(--garis); }
+.register-toggle { width: 100%; }
+.forgot-title { margin: 0 0 8px; text-align: left !important; }
+.register-access { margin-top: 4px; }
+@media (max-width: 480px) { .login-card-modern { padding: 26px 20px; } }
