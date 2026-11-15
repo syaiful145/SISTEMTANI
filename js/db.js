@@ -51,8 +51,11 @@ const DB = {
   async remove(tabel, id, files = []) {
     if (!TABLES[tabel]) throw new Error('Jenis data tidak dikenal.');
     const user = typeof me === 'function' ? me() : null;
-    if (tabel === 'pegawai' && user?.adminLevel !== 'utama') {
-      throw new Error('Hanya Admin Utama yang boleh menghapus data karyawan.');
+    if (user?.tipe === 'admin' && user?.adminLevel !== 'utama') {
+      throw new Error('Hanya Admin Utama yang boleh menghapus data operasional.');
+    }
+    if (tabel !== 'laporanDraft' && !(user?.tipe === 'admin' && user?.adminLevel === 'utama')) {
+      throw new Error('Penghapusan data operasional hanya boleh dilakukan Admin Utama.');
     }
 
     // Admin Utama memakai Edge Function + RPC service-role agar relasi FK,
