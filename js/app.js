@@ -723,7 +723,8 @@ function riwayatPegawai(id) {
 /* ===== Halaman ===== */
 function pageDashboard() {
   const t = DB.all('tanaman'), pn = DB.all('panen'), b = DB.all('barang'), p = DB.all('pegawai');
-  const laporanPanen = DB.all('laporan').filter(x => x.jenis === 'Panen');\n  const totalKg = pn.reduce((s, x) => s + (x.kg || 0), 0) + laporanPanen.reduce((s,x)=>s+Number(x.panenKg||0),0);
+  const laporanPanen = DB.all('laporan').filter(x => x.jenis === 'Panen');
+  const totalKg = pn.reduce((s, x) => s + (x.kg || 0), 0) + laporanPanen.reduce((s,x)=>s+Number(x.panenKg||0),0);
   const kartu = [
     ['Total tanaman', t.length, 'jenis tanaman dikelola'],
     ['Sedang ditanam', t.filter(x => ['Ditanam', 'Dalam perawatan'].includes(x.status)).length, 'tanaman aktif di lahan'],
