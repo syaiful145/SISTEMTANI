@@ -1182,7 +1182,7 @@ function pilihJenisLogin(role) {
   $('#login-description').textContent = role === 'admin'
     ? 'Masuk menggunakan email dan password administrator.'
     : 'Masuk menggunakan email dan password akun pegawai.';
-  $('#register-access').classList.toggle('hidden', role !== 'pegawai');
+  $('#register-access').classList.remove('hidden');
   $('#l-err').textContent = '';
 }
 
@@ -1233,12 +1233,14 @@ function tampilkanFormPasswordPemulihan() {
 }
 
 function setAuthMode(mode) {
-  const isRegister = mode === 'register';
-  $('#auth-login-area').classList.toggle('hidden', isRegister);
-  $('#register-area').classList.toggle('hidden', !isRegister);
-  $('#forgot-area').classList.add('hidden');
+  $('#auth-login-area').classList.toggle('hidden', mode !== 'login');
+  $('#register-area').classList.toggle('hidden', mode !== 'register');
+  $('#register-admin-area').classList.toggle('hidden', mode !== 'admin-register');
+  $('#forgot-area').classList.toggle('hidden', mode !== 'forgot');
   $('#r-msg').textContent = '';
+  $('#ra-msg').textContent = '';
   $('#r-msg').classList.remove('error');
+  $('#ra-msg').classList.remove('error');
 }
 
 async function daftarPegawai(e) {
@@ -1304,23 +1306,63 @@ async function daftarPegawai(e) {
   }
 }
 
+async function daftarAdmin(e) {
+  e.preventDefault();
+  const nama = $('#ra-nama').value.trim();
+  const username = $('#ra-username').value.trim().toLowerCase();
+  const email = $('#ra-email').value.trim();
+  const password = $('#ra-pass').value;
+  const ulangi = $('#ra-pass2').value;
+  const msg = $('#ra-msg');
+  msg.classList.remove('error');
+  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+    msg.textContent = 'Username harus 3–30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.';
+    msg.classList.add('error'); return;
+  }
+  if (password.length < 8 || password !== ulangi) {
+    msg.textContent = password.length < 8 ? 'Password minimal 8 karakter.' : 'Konfirmasi password tidak sama.';
+    msg.classList.add('error'); return;
+  }
+  const submit = $('#register-admin-form button[type="submit"]');
+  submit.disabled = true; submit.textContent = 'Mengirim...';
+  msg.textContent = 'Mengirim permohonan...';
+  try {
+    const { data, error } = await supabaseClient.auth.signUp({
+      email, password,
+      options: { data: { nama, username, requested_role: 'admin' } }
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error('Permohonan belum berhasil dibuat.');
+    $('#register-admin-form').reset();
+    msg.textContent = data.session
+      ? 'Permohonan terkirim. Tunggu persetujuan Admin Utama sebelum login.'
+      : 'Akun dibuat. Konfirmasi email masih aktif; periksa email sebelum menunggu verifikasi Admin Utama.';
+  } catch (err) {
+    msg.textContent = err.message || 'Permohonan gagal dikirim.';
+    msg.classList.add('error');
+  } finally {
+    submit.disabled = false; submit.textContent = 'Kirim Permohonan Admin';
+  }
+}
+
 async function init() {
   $('#login-form').onsubmit = login;
   $('#register-form').onsubmit = daftarPegawai;
+  $('#register-admin-form').onsubmit = daftarAdmin;
   $('#login-admin').onclick = () => pilihJenisLogin('admin');
   $('#login-pegawai').onclick = () => pilihJenisLogin('pegawai');
   $('#show-register').onclick = () => setAuthMode('register');
+  $('#show-admin-register').onclick = () => setAuthMode('admin-register');
   $('#back-to-login').onclick = () => setAuthMode('login');
+  $('#back-admin-login').onclick = () => setAuthMode('login');
   $('#forgot-form').onsubmit = kirimLinkResetPassword;
   $('#show-forgot').onclick = () => {
-    $('#auth-login-area').classList.add('hidden');
-    $('#forgot-area').classList.remove('hidden');
+    setAuthMode('forgot');
     $('#forgot-email').value = $('#l-user').value.trim();
     $('#forgot-message').textContent = '';
   };
   $('#back-login').onclick = () => {
-    $('#forgot-area').classList.add('hidden');
-    $('#auth-login-area').classList.remove('hidden');
+    setAuthMode('login');
   };
   $('#logout').onclick = async () => {
     try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); }
