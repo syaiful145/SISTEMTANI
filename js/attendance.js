@@ -51,9 +51,8 @@
     DB.d.pengaturanAbsensi=[DB.fromDb(row)];render();
   }
   function pageGudangAttendanceA(){
-    if(isAdmin())return pageGudang();
     const seeds=DB.all('barang').filter(x=>String(x.kategori||'').toLowerCase()==='bibit');
-    return {html:head('Stok Benih Pegawai')+(seeds.length?'<p class="muted">Pilih benih yang digunakan. Stok langsung berkurang setelah disimpan.</p>'+seeds.map(x=>'<section class="card"><h3>'+escA(x.nama)+'</h3><p><b>Sisa stok: '+Number(x.stok||0).toLocaleString('id-ID')+' '+escA(x.satuan||'')+'</b></p><form class="att-seed-use form-grid" data-barang-id="'+escA(x.id)+'"><label class="field"><span>Jumlah digunakan</span><input type="number" name="jumlah" min="1" max="'+Math.max(0,Number(x.stok)||0)+'" step="1" required '+(Number(x.stok)<=0?'disabled':'')+'></label><label class="field full"><span>Keterangan (opsional)</span><input name="keterangan" maxlength="250" placeholder="Contoh: penyemaian lahan A"></label><div class="form-actions"><button class="btn" type="submit" '+(Number(x.stok)<=0?'disabled':'')+'>Catat Penggunaan</button></div><p class="form-error full"></p></form></section>').join(''):'<section class="card"><p>Belum ada stok benih yang tersedia.</p></section>')};
+    return {html:head('Stok Benih')+'<p class="muted">Pegawai hanya melihat stok. Catat jumlah benih yang digunakan melalui formulir Laporan Harian agar otomatis tercatat pada riwayat pekerjaan.</p>'+(seeds.length?seeds.map(x=>'<section class="card"><h3>'+escA(x.nama)+'</h3><p><b>Sisa stok: '+Number(x.stok||0).toLocaleString('id-ID')+' '+escA(x.satuan||'')+'</b></p></section>').join(''):'<section class="card"><p>Belum ada stok benih yang tersedia.</p></section>')};
   }
   async function useSeedA(form){
     const id=form.dataset.barangId, jumlah=Number(form.elements.jumlah.value), keterangan=form.elements.keterangan.value.trim(), msg=form.querySelector('.form-error'), btn=form.querySelector('button[type="submit"]');
