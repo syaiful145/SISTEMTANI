@@ -395,12 +395,24 @@ function cfgPanen() {
   };
 }
 
+function detailBarang(id) {
+  const b=DB.get('barang',id); if(!b)return;
+  const rows=DB.all('transaksi').filter(t=>String(t.barangId)===String(id)).slice().sort((a,c)=>String(c.tanggal).localeCompare(String(a.tanggal))||c.id-a.id);
+  const masuk=rows.filter(t=>t.jenis==='Masuk').reduce((n,t)=>n+Number(t.jumlah||0),0);
+  const keluar=rows.filter(t=>t.jenis==='Keluar').reduce((n,t)=>n+Number(t.jumlah||0),0);
+  openInfo('Detail Barang · '+esc(b.nama),
+    '<div class="detail-grid"><p><strong>Kode</strong><br>'+esc(b.kode||'-')+'</p><p><strong>Kategori</strong><br>'+esc(b.kategori||'-')+'</p><p><strong>Stok saat ini</strong><br>'+rp(b.stok)+' '+esc(b.satuan||'')+'</p><p><strong>Total barang masuk tercatat</strong><br>'+rp(masuk)+' '+esc(b.satuan||'')+'</p><p><strong>Total barang keluar tercatat</strong><br>'+rp(keluar)+' '+esc(b.satuan||'')+'</p><p><strong>Batas minimum</strong><br>'+rp(b.minStok)+' '+esc(b.satuan||'')+'</p></div>'+
+    '<div class="row-actions">'+(isAdmin()?'<button class="btn" data-act="transaksiMasuk" data-id="'+b.id+'">+ Catat Barang Masuk</button>':'')+'</div>'+
+    '<h4>Riwayat barang masuk dan keluar</h4>'+tabel(['Tanggal','Jenis','Jumlah','Pegawai','Keterangan'],rows.map(t=>[tgl(t.tanggal),t.jenis==='Masuk'?'<span class="tag green">Masuk</span>':'<span class="tag red">Keluar</span>',rp(t.jumlah)+' '+esc(b.satuan||''),t.pegawaiId?esc(namaPegawai(t.pegawaiId)):'-',esc(t.keterangan||'-')]),'Belum ada transaksi untuk barang ini.'));
+}
+
 function cfgBarang() {
   return {
     judul: 'Data Barang',
     tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
     labelTambah: '+ Tambah Barang',
     nama: r => r.nama,
+    extra: r => '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+r.id+'">Detail</button>',
     kolom: [
       { h: 'Kode', f: r => esc(r.kode) },
       { h: 'Nama barang', f: r => esc(r.nama) },
@@ -448,7 +460,7 @@ function cfgPegawai() {
 }
 
 /* ----- Aksi transaksi gudang ----- */
-function openTransaksi() {
+function openTransaksi(defaults = {}) {
   const fields = [
     { name: 'barangId', label: 'Barang', type: 'select', num: true, req: true,
       options: () => DB.all('barang').map(b => [b.id, `${b.nama} (stok ${rp(b.stok)} ${b.satuan})`]) },
@@ -459,7 +471,7 @@ function openTransaksi() {
       options: () => DB.all('penanaman').map(p => [p.id, penanamanLabel(p)]) },
     { name: 'keterangan', label: 'Keterangan', full: true }
   ];
-  openModal('Catat Transaksi Stok', fields, { jenis: 'Keluar', tanggal: hariIni() }, async data => {
+  openModal('Catat Transaksi Stok', fields, { jenis: 'Keluar', tanggal: hariIni(), ...defaults }, async data => {
     const b = DB.get('barang', data.barangId);
     if (!b) return 'Barang tidak ditemukan.';
     if (!(data.jumlah > 0)) return 'Jumlah harus lebih dari 0.';
@@ -836,10 +848,13 @@ function pageGudang() {
   const b = DB.all('barang');
   const menipis = b.filter(x => x.stok <= x.minStok);
   const trx = DB.all('transaksi').slice().sort((a, c) => c.id - a.id).slice(0, 100);
+  const totalMasuk=trx.filter(t=>t.jenis==='Masuk').reduce((n,t)=>n+Number(t.jumlah||0),0);
+  const totalKeluar=trx.filter(t=>t.jenis==='Keluar').reduce((n,t)=>n+Number(t.jumlah||0),0);
   const bawah = `<div class="card">
     <div class="page-head"><h3>Riwayat transaksi stok</h3>
       <div class="page-actions">${bisa('gudang') ? '<button class="btn" data-act="transaksi">+ Catat transaksi</button>' : ''}</div></div>
-    ${tabel(['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Penanaman / Laporan', 'Pegawai', 'Keterangan'], trx.map(t => {
+    <div class="stats-grid"><div class="stat"><span>Total masuk (100 transaksi terbaru)</span><strong>${rp(totalMasuk)}</strong></div><div class="stat"><span>Total keluar (100 transaksi terbaru)</span><strong>${rp(totalKeluar)}</strong></div><div class="stat"><span>Jenis barang</span><strong>${b.length}</strong></div></div>
+    ${tabel(['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Penanaman / Laporan', 'Pegawai', 'Keterangan','Detail'], trx.map(t => {
       const brg = DB.get('barang', t.barangId) || {};
       const pj = DB.get('penanaman', t.penanamanId);
       return [
@@ -1065,7 +1080,7 @@ function arsipAbsensiBertingkat(rows){
   return '<section class="card"><div class="row-actions">'+btn('arsipAbsensiBackDay','','‹ Kembali ke Hari')+'</div><h3>Absensi '+new Date(ATT_ARCHIVE_DAY+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</h3>'+
     '<p class="muted">Total '+dayRows.length+' data pegawai pada tanggal ini.</p>'+
     tabel(['Pegawai','Masuk','Pulang','Foto Masuk','Foto Pulang','Detail','Aksi'],
-      dayRows.map(a=>[esc(namaPegawai(a.pegawaiId)),a.masukAt?waktuLokal(new Date(a.masukAt)):'-',a.pulangAt?waktuLokal(new Date(a.pulangAt)):'-',a.masukFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="masuk" data-id="'+a.id+'">Lihat</button>':'-',a.pulangFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Lihat</button>':'-','<button class="btn tiny ghost" data-act="detailRiwayatAbsensi" data-id="'+a.id+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusRiwayat" data-tbl="absensi" data-id="'+a.id+'">Hapus</button>':'')]),
+      dayRows.map(a=>[esc(namaPegawai(a.pegawaiId)),a.masukAt?waktuLokal(new Date(a.masukAt)):'-',a.pulangAt?waktuLokal(new Date(a.pulangAt)):'-',a.masukFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="masuk" data-id="'+a.id+'">Lihat</button>':'-',a.pulangFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Lihat</button>':'-','<button class="btn tiny ghost" data-act="detailRiwayatAbsensi" data-id="'+a.id+'">Detail</button>',me()?.tipe==='admin'&&me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusRiwayat" data-tbl="absensi" data-id="'+a.id+'">Hapus</button>':'-']),
       'Belum ada data absensi pada hari ini.')+'</section>';
 }
 
@@ -1725,6 +1740,8 @@ function aksiKlik(e) {
       DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); await DB.init(true); render(); }).catch(err => alert(err.message));
       return;
     }
+    case 'detailBarang': return detailBarang(id);
+    case 'transaksiMasuk': return openTransaksi({barangId:id,jenis:'Masuk'});
     case 'hapusLaporan': return hapusLaporanAdmin(id);
     case 'hapusRiwayat': return hapusRiwayatAdmin(b.dataset.tbl,id);
     case 'detailLahan': return detailLahan(id);
