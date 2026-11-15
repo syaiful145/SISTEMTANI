@@ -4,7 +4,7 @@ const SUPABASE_KEY = 'sb_publishable_FvWUHbnX5iM5ifvvalo5oA_ap1E6QoN';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TABLES = {
-  tanaman: 'tanaman', penanaman: 'penanaman', panen: 'panen', barang: 'barang',
+  lahan: 'lahan', tanaman: 'tanaman', penanaman: 'penanaman', panen: 'panen', barang: 'barang',
   transaksi: 'transaksi', pegawai: 'pegawai', laporan: 'laporan', absensi: 'absensi', pengaturanAbsensi: 'pengaturan_absensi', izin: 'izin_pegawai', log: 'log_aktivitas'
 };
 const DB = {
