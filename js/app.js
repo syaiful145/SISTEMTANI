@@ -77,6 +77,7 @@ const MENU = [
   { id: 'gudang', label: 'Gudang', icon: '📦', akses: 'gudang' },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
   { id: 'aktivitas', label: 'Laporan Harian', icon: '📝' },
+  { id: 'absensi', label: 'Absensi', icon: '🕒' },
   { id: 'laporan', label: 'Laporan', icon: '📊', adminOnly: true },
   { id: 'kalender', label: 'Kalender', icon: '📅' },
   { id: 'notifikasi', label: 'Notifikasi', icon: '🔔', adminOnly: true },
@@ -761,6 +762,53 @@ async function detailLaporan(id) {
   $('#modal [data-tutup]').onclick = tutupModal;
 }
 
+function pageAbsensi() {
+  const u = me(), today = hariIni();
+  if (u.tipe === 'pegawai') {
+    const rows = DB.all('absensi').filter(a => String(a.pegawaiId) === String(u.id)).sort((a,b) => b.tanggal.localeCompare(a.tanggal));
+    const todayRow = rows.find(a => a.tanggal === today);
+    const actions = !todayRow ? '<button class="btn" data-act="absenMasuk">Absen Masuk</button>' :
+      !todayRow.pulangAt ? '<button class="btn" data-act="absenPulang">Absen Pulang</button>' :
+      '<span class="tag green">Absensi hari ini selesai</span>';
+    return { html: head('Absensi Pegawai', actions) +
+      (todayRow ? `<section class="card" style="margin-bottom:16px"><h3>Absensi Hari Ini</h3><p>Masuk: <strong>${esc(todayRow.masukAt ? waktuLokal(new Date(todayRow.masukAt)) : '-')}</strong></p><p>Pulang: <strong>${esc(todayRow.pulangAt ? waktuLokal(new Date(todayRow.pulangAt)) : 'Belum absen pulang')}</strong></p><p>Lokasi masuk: ${esc(todayRow.masukAlamat || '-')}</p><p>Lokasi pulang: ${esc(todayRow.pulangAlamat || '-')}</p></section>` : '<section class="card" style="margin-bottom:16px"><p>Anda belum melakukan absensi hari ini.</p></section>') +
+      tabel(['Tanggal','Waktu Masuk','Waktu Pulang','Lokasi Masuk','Lokasi Pulang'],
+        rows.map(a => [tgl(a.tanggal), a.masukAt ? waktuLokal(new Date(a.masukAt)) : '-', a.pulangAt ? waktuLokal(new Date(a.pulangAt)) : '-', esc(a.masukAlamat || '-'), esc(a.pulangAlamat || '-')]), 'Belum ada riwayat absensi.') };
+  }
+  const rows = DB.all('absensi').slice().sort((a,b) => b.tanggal.localeCompare(a.tanggal) || b.id-a.id);
+  const hadir = rows.filter(a => a.tanggal === today).length;
+  const pegawaiAktif = DB.all('pegawai').filter(p => p.statusVerifikasi === 'disetujui').length;
+  return { html: head('Rekap Absensi Pegawai') +
+    `<section class="stats-grid"><div class="stat-card"><span>Sudah absen hari ini</span><strong>${hadir}</strong></div><div class="stat-card"><span>Belum absen hari ini</span><strong>${Math.max(0, pegawaiAktif-hadir)}</strong></div></section>` +
+    tabel(['Tanggal','Pegawai','Waktu Masuk','Waktu Pulang','Lokasi Masuk','Lokasi Pulang'],
+      rows.map(a => [tgl(a.tanggal), esc(namaPegawai(a.pegawaiId)), a.masukAt ? waktuLokal(new Date(a.masukAt)) : '-', a.pulangAt ? waktuLokal(new Date(a.pulangAt)) : '-', esc(a.masukAlamat || '-'), esc(a.pulangAlamat || '-')]), 'Belum ada data absensi.') };
+}
+async function lakukanAbsensi(jenis) {
+  const u = me();
+  if (u?.tipe !== 'pegawai') return alert('Hanya pegawai yang dapat melakukan absensi.');
+  if (!navigator.geolocation) return alert('Browser tidak mendukung GPS.');
+  try {
+    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }));
+    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+    const alamat = await namaLokasiGPS(lat, lon);
+    const now = new Date().toISOString();
+    const existing = DB.all('absensi').find(a => String(a.pegawaiId) === String(u.id) && a.tanggal === hariIni());
+    if (jenis === 'masuk') {
+      if (existing) return alert('Anda sudah absen masuk hari ini.');
+      await DB.add('absensi', { pegawaiId: u.id, authUserId: u.authId, tanggal: hariIni(), masukAt: now, masukLat: lat, masukLon: lon, masukAlamat: alamat });
+      await catat('Absen masuk', alamat);
+    } else {
+      if (!existing || existing.pulangAt) return alert('Data absen masuk tidak ditemukan atau Anda sudah absen pulang.');
+      await DB.update('absensi', existing.id, { pulangAt: now, pulangLat: lat, pulangLon: lon, pulangAlamat: alamat });
+      await catat('Absen pulang', alamat);
+    }
+    await DB.init(isAdmin());
+    render();
+  } catch (e) {
+    alert('Absensi gagal: ' + (e.message || 'Lokasi tidak berhasil diambil. Izinkan akses lokasi.'));
+  }
+}
+
 function pageNotifikasi() {
   const list = notifikasi();
   const ikon = { Panen: '🧺', Jadwal: '🗓️', Stok: '📦', Laporan: '📝', Update: '⏳' };
@@ -1241,6 +1289,7 @@ const PAGES = {
   gudang: pageGudang,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
   aktivitas: pageAktivitas,
+  absensi: pageAbsensi,
   laporan: pageLaporan,
   kalender: pageKalender,
   notifikasi: pageNotifikasi,
@@ -1369,6 +1418,8 @@ function aksiKlik(e) {
     case 'tolakPegawai': return prosesVerifikasiPegawai(id, 'ditolak');
     case 'transaksi': return openTransaksi();
     case 'lapor': return openLapor();
+    case 'absenMasuk': return lakukanAbsensi('masuk');
+    case 'absenPulang': return lakukanAbsensi('pulang');
     case 'detailLaporan': return detailLaporan(id);
     case 'statusLaporan': {
       const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
