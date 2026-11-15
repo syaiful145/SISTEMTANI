@@ -982,7 +982,7 @@ function pageAktivitas() {
           l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
           '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="' + esc(l.id) + '">Detail</button>' +
           (l.status === 'diterima'
-            ? '<button class="btn tiny ghost" data-act="statusLaporan" data-status="belum_diterima" data-id="' + esc(l.id) + '">Batalkan penerimaan</button>'
+            ? '<span class="tag green">Sudah diterima</span>'
             : '<button class="btn tiny" data-act="statusLaporan" data-status="diterima" data-id="' + esc(l.id) + '">Terima</button>') + (me()?.adminLevel==='utama' ? '<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>' : '') + '</div>'
         ]), 'Belum ada laporan dari pegawai.')
   };
