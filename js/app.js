@@ -824,6 +824,23 @@ function detailRiwayatAbsensi(id){
     (a.pulangFotoPath?'<button class="btn tiny" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Foto Pulang</button>':'')+'</div>');
 }
 
+function arsipAbsensiBertingkat(rows){
+  const byYear={};
+  rows.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))).forEach(a=>{
+    const y=String(a.tanggal).slice(0,4),m=String(a.tanggal).slice(5,7);
+    (byYear[y]??={})[m]??=[];
+    byYear[y][m].push(a);
+  });
+  return Object.entries(byYear).sort((a,b)=>b[0].localeCompare(a[0])).map(([year,months])=>
+    '<details class="card"><summary><strong>Tahun '+esc(year)+'</strong></summary>'+
+    Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([month,days])=>
+      '<details><summary>'+new Date(year+'-'+month+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'})+' ('+days.length+' hari)</summary>'+
+      '<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Pegawai</th><th>Masuk</th><th>Pulang</th><th>Detail</th></tr></thead><tbody>'+
+      days.map(a=>'<tr><td>'+new Date(a.tanggal+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</td><td>'+esc(namaPegawai(a.pegawaiId))+'</td><td>'+(a.masukAt?waktuLokal(new Date(a.masukAt)):'-')+'</td><td>'+(a.pulangAt?waktuLokal(new Date(a.pulangAt)):'-')+'</td><td><button class="btn tiny ghost" data-act="detailRiwayatAbsensi" data-id="'+a.id+'">Detail</button></td></tr>').join('')+
+      '</tbody></table></div></details>').join('')+'</details>'
+  ).join('')||'<p class="muted">Belum ada riwayat absensi.</p>';
+}
+
 function pageAbsensi(){
   const u=me(),today=hariIni(),cfg=DB.all('pengaturanAbsensi')[0]||{jamMasuk:'08:00',jamPulang:'17:00',toleransiTerlambat:0},izin=DB.all('izin');
   if(u.tipe==='pegawai'){
@@ -853,7 +870,7 @@ function pageAbsensi(){
   return {html:head('Rekap Absensi Pegawai')+
     '<section class="card"><h3>Atur Jam Kerja</h3><form id="att-schedule" class="form-grid"><label class="field"><span>Jam masuk</span><input name="jamMasuk" type="time" value="'+esc(cfg.jamMasuk)+'" required></label><label class="field"><span>Jam pulang</span><input name="jamPulang" type="time" value="'+esc(cfg.jamPulang)+'" required></label><label class="field"><span>Toleransi terlambat (menit)</span><input name="toleransiTerlambat" type="number" min="0" max="180" value="'+(Number(cfg.toleransiTerlambat)||0)+'" required></label><button class="btn" type="submit">Simpan Jadwal</button><p id="att-schedule-msg" class="form-error full"></p></form></section>'+
     '<h3>Status Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Foto Masuk','Foto Pulang'],status.map((r,i)=>{const a=todayRows.find(x=>String(x.pegawaiId)===String(peg[i].id));return r.concat([a?.masukFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="masuk" data-id="'+a.id+'">Lihat</button>':'-',a?.pulangFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Lihat</button>':'-']);}),'Belum ada pegawai.')+
-    '<h3>Tabel Keterangan Pulang Pegawai</h3>'+tabel(['Pegawai','Tanggal','Jam pulang','Jenis','Keterangan','Foto'],DB.all('absensi').filter(x=>x.pulangAt).sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))).map(x=>[esc(namaPegawai(x.pegawaiId)),tgl(x.tanggal),waktuLokal(new Date(x.pulangAt)),esc(x.jenisPulang==='awal'?'Pulang awal':'Normal'),esc(x.alasanPulang||'-'),x.pulangFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+x.id+'">Lihat</button>':'-']),'Belum ada data pulang.')+
+    '<h3>Arsip Riwayat Absensi</h3>'+arsipAbsensiBertingkat(DB.all('absensi'))+
     '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Periode','Jenis','Alasan','Bukti','Keputusan'],pending.map(x=>[esc(namaPegawai(x.pegawaiId)),tgl(x.tanggalMulai)+' – '+tgl(x.tanggalSelesai),esc(x.jenis),esc(x.alasan),'<button class="btn tiny ghost" data-act="lihatBuktiIzin" data-id="'+x.id+'">Lihat</button>','<button class="btn tiny" data-act="prosesIzin" data-status="disetujui" data-id="'+x.id+'">Setujui</button> <button class="btn tiny danger" data-act="prosesIzin" data-status="ditolak" data-id="'+x.id+'">Tolak</button>']),'Tidak ada izin menunggu.'),
     after:()=>{const form=$('#att-schedule');if(form)form.onsubmit=async ev=>{ev.preventDefault();const d={jamMasuk:form.elements.jamMasuk.value,jamPulang:form.elements.jamPulang.value,toleransiTerlambat:Number(form.elements.toleransiTerlambat.value)};const msg=$('#att-schedule-msg');try{if(d.jamPulang<=d.jamMasuk)throw new Error('Jam pulang harus setelah jam masuk.');const old=DB.all('pengaturanAbsensi')[0];if(old)await DB.update('pengaturanAbsensi',old.id,d);else await DB.add('pengaturanAbsensi',d);await DB.init(true);render();}catch(x){msg.textContent=x.message;}};}};
 }
@@ -1770,6 +1787,9 @@ async function init() {
   $('#overlay').onclick = closeSidebar;
   $('#content').addEventListener('click', aksiKlik);
   $('#content').addEventListener('change', e => {
+    const attFilter = e.target.dataset.attHistoryFilter;
+    if (attFilter === 'year') { ATT_HISTORY_YEAR = e.target.value; ATT_HISTORY_MONTH = ''; render(); return; }
+    if (attFilter === 'month') { ATT_HISTORY_MONTH = e.target.value; render(); return; }
     const k = e.target.dataset.lap;
     if (!k) return;
     LAP[k] = e.target.value;
