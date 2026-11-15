@@ -367,7 +367,7 @@ function cfgPegawai() {
     judul: 'Data Pegawai',
     tambah: false, ubah: true, hapus: true,
     nama: r => r.nama,
-    extra: r => `${r.statusVerifikasi === 'menunggu' ? `<button class="btn tiny" data-act="setujuiPegawai" data-id="${r.id}">Setujui</button> <button class="btn tiny danger" data-act="tolakPegawai" data-id="${r.id}">Tolak</button>` : ''} <button class="btn tiny ghost" data-act="riwayat" data-id="${r.id}">Riwayat</button>`,
+    extra: r => `${r.statusVerifikasi === 'menunggu' ? `<button class="btn tiny" data-act="setujuiPegawai" data-id="${r.id}">Setujui</button> <button class="btn tiny danger" data-act="tolakPegawai" data-id="${r.id}">Tolak</button>` : ''} ${r.authUserId ? `<button class="btn tiny ghost" data-act="resetPasswordPegawai" data-id="${r.id}">Reset Password</button>` : ''} <button class="btn tiny ghost" data-act="riwayat" data-id="${r.id}">Riwayat</button>`,
     kolom: [
       { h: 'Nama', f: r => esc(r.nama) },
       { h: 'ID', f: r => esc(r.idPegawai) },
@@ -752,6 +752,65 @@ function pageKalender() {
 }
 
 
+function buatPasswordSementara(panjang = 14) {
+  const karakter = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const acak = new Uint32Array(panjang);
+  crypto.getRandomValues(acak);
+  return Array.from(acak, n => karakter[n % karakter.length]).join('');
+}
+
+function nomorWhatsApp(telepon) {
+  let nomor = String(telepon || '').replace(/\\D/g, '');
+  if (nomor.startsWith('0')) nomor = '62' + nomor.slice(1);
+  else if (nomor.startsWith('8')) nomor = '62' + nomor;
+  return /^62\\d{8,13}$/.test(nomor) ? nomor : '';
+}
+
+async function resetPasswordPegawai(id) {
+  if (!isAdmin()) return alert('Hanya Admin yang boleh mereset password.');
+  const pegawai = DB.get('pegawai', id);
+  if (!pegawai) return alert('Data pegawai tidak ditemukan.');
+  if (!pegawai.authUserId) return alert('Akun login pegawai ini belum terhubung.');
+
+  const temporaryPassword = buatPasswordSementara();
+  if (!confirm(`Reset password akun ${pegawai.nama}? Password sementara baru akan dibuat.`)) return;
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('admin-riset-password', {
+      body: { pegawaiId: id, temporaryPassword }
+    });
+
+    if (error) {
+      let pesan = error.message || 'Permintaan reset password gagal.';
+      try {
+        const detail = await error.context?.json();
+        if (detail?.error) pesan = detail.error;
+      } catch (_) {}
+      throw new Error(pesan);
+    }
+    if (!data?.success) throw new Error(data?.error || 'Function tidak mengonfirmasi reset password.');
+
+    const nomor = nomorWhatsApp(pegawai.telepon);
+    const pesanWA = `Halo ${pegawai.nama}, password sementara akun AgriCore Anda: ${temporaryPassword}. Silakan login lalu segera ganti password setelah berhasil masuk.`;
+    const tautanWA = nomor
+      ? `https://wa.me/${nomor}?text=${encodeURIComponent(pesanWA)}`
+      : '';
+
+    openInfo(`Password sementara · ${pegawai.nama}`, `
+      <p>Password akun pegawai berhasil direset.</p>
+      <p><strong>Password sementara:</strong></p>
+      <p><code>${esc(temporaryPassword)}</code></p>
+      <button class="btn" data-act="salinPassword" data-password="${esc(temporaryPassword)}">Salin password</button>
+      ${tautanWA
+        ? `<p><a class="btn ghost" href="${esc(tautanWA)}" target="_blank" rel="noopener noreferrer">Buka WhatsApp untuk mengirim ke pegawai</a></p>`
+        : '<p class="muted">Nomor WhatsApp belum valid. Sampaikan password sementara secara langsung melalui cara yang aman.</p>'}
+      <p class="muted">Minta pegawai mengganti password setelah login.</p>
+    `);
+  } catch (err) {
+    alert('Gagal mereset password: ' + (err.message || 'Kesalahan tidak diketahui.'));
+  }
+}
+
 async function prosesVerifikasiPegawai(id, status) {
   let alasan = null;
   if (status === 'ditolak') {
@@ -840,6 +899,16 @@ function aksiKlik(e) {
       return;
     }
     case 'riwayat': return riwayatPegawai(id);
+    case 'resetPasswordPegawai': return resetPasswordPegawai(id);
+    case 'salinPassword': {
+      const password = b.dataset.password || '';
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(password).then(() => alert('Password berhasil disalin.')).catch(() => prompt('Salin password ini:', password));
+      } else {
+        prompt('Salin password ini:', password);
+      }
+      return;
+    }
     case 'setujuiPegawai': return prosesVerifikasiPegawai(id, 'disetujui');
     case 'tolakPegawai': return prosesVerifikasiPegawai(id, 'ditolak');
     case 'transaksi': return openTransaksi();
