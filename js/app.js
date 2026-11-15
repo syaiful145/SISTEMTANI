@@ -71,6 +71,7 @@ const catat = (aksi, entitas) => { const u = me(); return DB.log(u ? u.key : 'si
 /* ===== Menu ===== */
 const MENU = [
   { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'lahan', label: 'Data Lahan', icon: '🗺️', adminOnly: true },
   { id: 'tanaman', label: 'Tanaman', icon: '🌿' },
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
@@ -264,6 +265,53 @@ function openCrud(tbl, id) {
     await catat(`${id ? 'Ubah' : 'Tambah'} ${cfg.judul}`, cfg.nama({ ...lama, ...data }));
     return null;
   });
+}
+
+function cfgLahan() {
+  return {
+    judul: 'Data Lahan',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: false,
+    labelTambah: '+ Tambah Lahan',
+    nama: r => r.nama,
+    extra: r => '<button class="btn tiny ghost" data-act="detailLahan" data-id="'+r.id+'">Detail</button>',
+    kolom: [
+      { h: 'Nama lahan', f: r => '<strong>'+esc(r.nama)+'</strong>' },
+      { h: 'Luas total', f: r => rp(r.luasTotalM2)+' m²' },
+      { h: 'Lokasi', f: r => esc(r.lokasi||'-') },
+      { h: 'Status', f: r => r.aktif===false?'<span class="tag red">Nonaktif</span>':'<span class="tag green">Aktif</span>' }
+    ],
+    fields: () => [
+      { name: 'nama', label: 'Nama lahan (contoh: Tanah A)', req: true },
+      { name: 'luasTotalM2', label: 'Luas total (m²)', type: 'number', req: true },
+      { name: 'lokasi', label: 'Alamat / lokasi lahan' },
+      { name: 'keterangan', label: 'Keterangan', type: 'textarea', full: true },
+      { name: 'aktif', label: 'Status lahan', type: 'select', options: [['true','Aktif'],['false','Nonaktif']], def: 'true', req: true }
+    ],
+    olah: d => { d.luasTotalM2=Number(d.luasTotalM2); d.aktif=d.aktif!=='false'; },
+    validasi: d => !d.nama?.trim() || !Number.isFinite(Number(d.luasTotalM2)) || Number(d.luasTotalM2)<=0 ? 'Nama dan luas lahan wajib diisi dengan benar.' : null
+  };
+}
+
+function detailLahan(id) {
+  const land=DB.get('lahan',id); if(!land)return;
+  const reports=DB.all('laporan').filter(l=>String(l.lahanId)===String(id));
+  const used=reports.reduce((n,l)=>n+Number(l.luasM2||0),0);
+  const planted=reports.reduce((n,l)=>n+Number(l.jumlahDitanam||0),0);
+  const crops=[...new Set(reports.map(l=>l.tanamanNama).filter(Boolean))];
+  const rows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  openInfo('Detail Lahan · '+esc(land.nama),
+    '<div class="detail-grid">'+
+    '<p><strong>Nama lahan</strong><br>'+esc(land.nama)+'</p>'+
+    '<p><strong>Lokasi</strong><br>'+esc(land.lokasi||'-')+'</p>'+
+    '<p><strong>Luas total</strong><br>'+rp(land.luasTotalM2)+' m²</p>'+
+    '<p><strong>Luas terlapor dikerjakan</strong><br>'+rp(used)+' m²</p>'+
+    '<p><strong>Sisa luas berdasarkan laporan</strong><br>'+rp(Math.max(0,Number(land.luasTotalM2)-used))+' m²</p>'+
+    '<p><strong>Jumlah tanaman dilaporkan</strong><br>'+rp(planted)+'</p>'+
+    '<p><strong>Jenis tanaman</strong><br>'+esc(crops.join(', ')||'-')+'</p>'+
+    '</div><h4>Riwayat Pekerjaan Pegawai</h4>'+
+    tabel(['Tanggal','Pegawai','Tanaman','Luas','Jumlah ditanam','Status','Detail'],
+      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),esc(l.statusTanaman||'-'),'<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+l.id+'">Detail</button>']),
+      'Belum ada pekerjaan yang dilaporkan pada lahan ini.'));
 }
 
 /* ----- Konfigurasi tiap modul ----- */
@@ -1423,6 +1471,7 @@ function pageAdmins() {
 
 const PAGES = {
   dashboard: pageDashboard,
+  lahan: () => ({ html: crud('lahan', cfgLahan()) }),
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
   penanaman: () => ({ html: crud('penanaman', cfgPenanaman()) }),
   panen: () => ({ html: crud('panen', cfgPanen()) }),
@@ -1538,6 +1587,7 @@ function aksiKlik(e) {
       DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); render(); }).catch(err => alert(err.message));
       return;
     }
+    case 'detailLahan': return detailLahan(id);
     case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
     case 'resetPasswordPegawai': return resetPasswordPegawai(id);
