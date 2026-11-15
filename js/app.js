@@ -734,18 +734,19 @@ function pageAktivitas() {
     const rows = DB.all('laporan').filter(l => l.pegawaiId === u.id).sort((a, b) => b.id - a.id);
     return {
       html: head('Laporan Harian', '<button class="btn" data-act="lapor">+ Kirim Laporan</button>') +
-        tabel(['Tanggal', 'Jenis', 'Lokasi', 'Status'],
-          rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc(l.lokasi),
-            l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>']),
+        tabel(['Tanggal', 'Kegiatan', 'Tanaman', 'Luas', 'Status', 'Detail'],
+          rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
+            l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
+            '<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),
           'Belum ada laporan yang dikirim. Gunakan tombol di atas untuk melapor kegiatan di lapangan.')
     };
   }
   const rows = DB.all('laporan').slice().sort((a, b) => b.id - a.id);
   return {
     html: head('Laporan Harian Pegawai') +
-      tabel(['Tanggal', 'Pegawai', 'Jenis', 'Lokasi', 'Status', 'Aksi'],
+      tabel(['Tanggal', 'Pegawai', 'Kegiatan', 'Tanaman', 'Luas', 'Status', 'Aksi'],
         rows.map(l => [
-          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc(l.lokasi),
+          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
           l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
           '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="' + esc(l.id) + '">Detail</button>' +
           (l.status === 'diterima'
@@ -776,7 +777,13 @@ async function detailLaporan(id) {
       <p><strong>Jenis kegiatan</strong><br>${esc(l.jenis)}</p>
       <p><strong>Lokasi</strong><br>${esc(l.lokasi)}</p>
       <p><strong>Status</strong><br>${l.status === 'diterima' ? 'Diterima' : 'Belum diterima'}</p>
-      <p><strong>Deskripsi</strong><br>${esc(l.deskripsi)}</p>
+      <p><strong>Deskripsi pekerjaan</strong><br>${esc(l.deskripsi)}</p>
+      <p><strong>Tanaman</strong><br>${esc(l.tanamanNama||'-')}</p>
+      <p><strong>Luas dikerjakan</strong><br>${l.luasM2==null?'-':esc(l.luasM2)+' m²'}</p>
+      <p><strong>Jumlah ditanam</strong><br>${l.jumlahDitanam==null?'-':esc(l.jumlahDitanam)}</p>
+      <p><strong>Umur tanaman</strong><br>${l.umurTanamanHari==null?'-':esc(l.umurTanamanHari)+' hari'}</p>
+      <p><strong>Status tanaman</strong><br>${esc(l.statusTanaman||'-')}</p>
+      <p><strong>Benih dipakai</strong><br>${l.benihDipakai==null?'-':esc(l.benihDipakai)+' '+esc((DB.get('barang',l.benihBarangId)||{}).satuan||'')+' · '+esc((DB.get('barang',l.benihBarangId)||{}).nama||'')}</p>
       ${lokasiFoto}
     </div>
     <h4>Foto Bukti Kegiatan</h4>${fotoHtml}
