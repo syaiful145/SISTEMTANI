@@ -900,12 +900,25 @@ function pageProfil() {
             const { data: publicData } = supabaseClient.storage.from('profile-photos').getPublicUrl(path);
             avatar = publicData.publicUrl + '?v=' + Date.now();
           }
-          const { error } = await supabaseClient.from('profiles').update({ nama, avatar_url: avatar }).eq('id', u.authId);
+          const { data: savedProfile, error } = await supabaseClient
+            .from('profiles')
+            .update({ nama, avatar_url: avatar })
+            .eq('id', u.authId)
+            .select('id,nama,avatar_url')
+            .maybeSingle();
           if (error) throw error;
+          if (!savedProfile) throw new Error('Profil tidak tersimpan: data akun tidak ditemukan atau izin database menolak perubahan.');
+
           if (u.tipe === 'pegawai') {
-            const { error: pe } = await supabaseClient.from('pegawai').update({ nama }).eq('auth_user_id', u.authId);
+            const { data: savedEmployee, error: pe } = await supabaseClient
+              .from('pegawai')
+              .update({ nama })
+              .eq('auth_user_id', u.authId)
+              .select('id,nama')
+              .maybeSingle();
             if (pe) throw pe;
-            const pr = DB.get('pegawai', u.id); if (pr) pr.nama = nama;
+            if (!savedEmployee) throw new Error('Nama profil utama tersimpan, tetapi data pegawai tidak berubah. Periksa izin tabel pegawai.');
+            const pr = DB.get('pegawai', u.id); if (pr) pr.nama = savedEmployee.nama;
           }
           u.nama = nama; u.avatarUrl = avatar;
           alert('Profil berhasil diperbarui.'); render();
