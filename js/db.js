@@ -5,7 +5,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TABLES = {
   tanaman: 'tanaman', penanaman: 'penanaman', panen: 'panen', barang: 'barang',
-  transaksi: 'transaksi', pegawai: 'pegawai', laporan: 'laporan', log: 'log_aktivitas'
+  transaksi: 'transaksi', pegawai: 'pegawai', laporan: 'laporan', absensi: 'absensi', log: 'log_aktivitas'
 };
 const DB = {
   d: Object.fromEntries(Object.keys(TABLES).map(k => [k, []])),
