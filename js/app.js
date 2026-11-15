@@ -965,6 +965,52 @@ async function kelolaAdminKedua(action, adminId, nama) {
   } catch (ex) { alert('Gagal mengelola Admin: ' + (ex.message || 'Kesalahan tidak diketahui.')); }
 }
 
+async function muatPermohonanAdmin() {
+  const box = $('#admin-applications-loading');
+  if (!box) return;
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('admin-registration', { body: { action: 'list' } });
+    if (error) {
+      let message = error.message || 'Gagal memuat permohonan.';
+      try { const detail = await error.context?.json(); if (detail?.error) message = detail.error; } catch (_) {}
+      throw new Error(message);
+    }
+    if (!data?.success) throw new Error(data?.error || 'Server tidak mengonfirmasi permintaan.');
+    const apps = data.applications || [];
+    const rows = apps.map(x => [
+      '<strong>' + esc(x.nama) + '</strong>',
+      esc(x.username),
+      esc(x.email),
+      tgl(x.created_at),
+      '<div class="row-actions"><button class="btn tiny" data-act="approveAdminApplication" data-id="' + esc(x.id) + '">Setujui</button><button class="btn tiny danger" data-act="rejectAdminApplication" data-id="' + esc(x.id) + '">Tolak</button></div>'
+    ]);
+    box.outerHTML = tabel(['Nama', 'Username', 'Email', 'Tanggal', 'Tindakan'], rows, 'Tidak ada permohonan admin yang menunggu.');
+  } catch (err) {
+    box.textContent = 'Gagal memuat permohonan: ' + (err.message || 'Kesalahan tidak diketahui.');
+  }
+}
+
+async function prosesPermohonanAdmin(applicationId, action) {
+  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang dapat memverifikasi permohonan.');
+  const label = action === 'approve' ? 'menyetujui' : 'menolak';
+  if (!confirm('Yakin ' + label + ' permohonan Admin Kedua ini?')) return;
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('admin-registration', {
+      body: { action, applicationId }
+    });
+    if (error) {
+      let message = error.message || 'Permintaan gagal.';
+      try { const detail = await error.context?.json(); if (detail?.error) message = detail.error; } catch (_) {}
+      throw new Error(message);
+    }
+    if (!data?.success) throw new Error(data?.error || 'Server tidak mengonfirmasi tindakan.');
+    alert(action === 'approve' ? 'Pendaftaran disetujui. Akun kini menjadi Admin Kedua.' : 'Pendaftaran ditolak.');
+    render();
+  } catch (err) {
+    alert('Gagal memproses permohonan: ' + (err.message || 'Kesalahan tidak diketahui.'));
+  }
+}
+
 function pageAdmins() {
   return { html: head('Manajemen Admin') + '<div id="admin-list-loading" class="empty">Memuat daftar administrator...</div>', after: async () => {
     const target = $('#admin-list-loading');
@@ -985,7 +1031,9 @@ function pageAdmins() {
         '</strong></div><div class="stat"><span>Admin Utama</span><strong>' + admins.filter(x => x.admin_level === 'utama').length +
         '</strong></div><div class="stat"><span>Admin Kedua</span><strong>' + admins.filter(x => x.admin_level === 'kedua').length +
         '</strong></div></div>' + (utama ? '<p class="muted">Admin Utama dapat mereset password dan menghapus Admin Kedua. Akun Admin Utama dilindungi.</p>' : '<p class="muted">Anda dapat melihat daftar administrator. Pengelolaan akun hanya tersedia untuk Admin Utama.</p>') +
-        tabel(['Nama', 'Username', 'Tingkatan', 'Aksi'], rows, 'Belum ada administrator.');
+        tabel(['Nama', 'Username', 'Tingkatan', 'Aksi'], rows, 'Belum ada administrator.') +
+        (utama ? '<section class="card" style="margin-top:20px"><h3>Permohonan Admin Kedua</h3><div id="admin-applications-loading" class="empty">Memuat permohonan...</div></section>' : '');
+      if (utama) muatPermohonanAdmin();
     } catch (ex) { target.textContent = 'Gagal memuat daftar admin: ' + (ex.message || 'Periksa izin akses.'); }
   }};
 }
@@ -1109,6 +1157,8 @@ function aksiKlik(e) {
     case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
     case 'resetPasswordPegawai': return resetPasswordPegawai(id);
+    case 'approveAdminApplication': return prosesPermohonanAdmin(b.dataset.id, 'approve');
+    case 'rejectAdminApplication': return prosesPermohonanAdmin(b.dataset.id, 'reject');
     case 'resetAdmin': return kelolaAdminKedua('reset', b.dataset.id, b.dataset.nama);
     case 'hapusAdmin': return kelolaAdminKedua('delete', b.dataset.id, b.dataset.nama);
     case 'salinPassword': {
