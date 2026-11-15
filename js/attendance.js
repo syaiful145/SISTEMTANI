@@ -25,7 +25,7 @@
       const action=!r?'<button class="btn" data-act="att-photo-in">Absen Masuk · Foto</button>':!r.pulangAt?'<button class="btn" data-act="att-photo-out">Absen Pulang · Foto</button>':'<span class="tag green">Absensi selesai</span>';
       return {html:head('Absensi Pegawai',action)+'<section class="card"><h3>Jadwal Kerja</h3><p>Masuk <b>'+escA(String(sched.jamMasuk).slice(0,5))+'</b> · Pulang <b>'+escA(String(sched.jamPulang).slice(0,5))+'</b></p><p>Toleransi terlambat: '+Number(sched.toleransiTerlambat||0)+' menit</p><p>Status hari ini: '+tagA(state)+'</p><button class="btn ghost" data-act="att-leave">+ Ajukan Izin / Sakit</button></section>'+
       (r?'<section class="card"><h3>Absensi Hari Ini</h3><p>Masuk: '+timeA(r.masukAt)+'</p><p>Pulang: '+timeA(r.pulangAt)+'</p><p>Lokasi masuk: '+escA(r.masukAlamat||'-')+'</p><p>Lokasi pulang: '+escA(r.pulangAlamat||'-')+'</p></section>':'<section class="card"><p>Belum ada catatan absensi hari ini.</p></section>')+
-      '<h3>Riwayat Absensi</h3>'+tabel(['Tanggal','Status','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],own.map(x=>[dateA(x.tanggal),tagA(statusA(x,sched)),timeA(x.masukAt),timeA(x.pulangAt),escA(x.masukAlamat||'-'),escA(x.pulangAlamat||'-')]),'Belum ada riwayat.')+
+      '<h3>Riwayat Absensi</h3>'+historyTreeA(own)+
       '<h3>Riwayat Pengajuan Izin</h3>'+tabel(['Tanggal','Jenis','Alasan','Status','Catatan Admin'],mine.map(x=>[dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),tagA(x.status),escA(x.catatanAdmin||'-')]),'Belum ada pengajuan izin.')};
     }
     const staff=DB.all('pegawai').filter(x=>x.statusVerifikasi==='disetujui'), todayRows=DB.all('absensi').filter(x=>x.tanggal===today);
@@ -38,7 +38,7 @@
       '<section class="stats-grid"><div class="stat-card"><span>Hadir</span><strong>'+attended+'</strong></div><div class="stat-card"><span>Terlambat</span><strong>'+late+'</strong></div><div class="stat-card"><span>Izin</span><strong>'+approved.length+'</strong></div><div class="stat-card"><span>Tidak hadir</span><strong>'+absent+'</strong></div></section>'+
       '<h3>Rekap Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],staff.map(p=>{const r=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const st=r?statusA(r,sched):approvedA(p.id,today)?'Izin':'Tidak hadir';return [escA(p.nama),tagA(st),timeA(r&&r.masukAt),timeA(r&&r.pulangAt),escA(r&&r.masukAlamat||'-'),escA(r&&r.pulangAlamat||'-')];}),'Belum ada pegawai.')+
       '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Tanggal','Jenis','Alasan','Aksi'],pending.map(x=>[escA(namaPegawai(x.pegawaiId)),dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),'<button class="btn tiny" data-act="att-review" data-id="'+x.id+'">Periksa</button>']),'Tidak ada pengajuan menunggu.')+
-      '<h3>Riwayat Absensi</h3>'+tabel(['Tanggal','Pegawai','Masuk','Pulang','Lokasi masuk','Lokasi pulang','Foto'],DB.all('absensi').slice().sort((a,b)=>b.tanggal.localeCompare(a.tanggal)).map(x=>[dateA(x.tanggal),escA(namaPegawai(x.pegawaiId)),timeA(x.masukAt),timeA(x.pulangAt),escA(x.masukAlamat||'-'),escA(x.pulangAlamat||'-'),'<button class="btn tiny" data-act="att-detail" data-id="'+x.id+'">Lihat Foto</button>']),'Belum ada data.')};
+      '<h3>Arsip Riwayat Absensi</h3>'+historyTreeA(DB.all('absensi'),true)};
   }
   async function scheduleEditA(){
     if(!isAdmin())return;
@@ -70,8 +70,24 @@
     if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||! /^\d{4}-\d{2}-\d{2}$/.test(end)||end<start||!['izin','sakit'].includes(kind.toLowerCase()))return alert('Tanggal atau jenis izin tidak valid.');
     const input=document.createElement('input');input.type='file';input.accept='image/*';input.capture='environment';input.onchange=async()=>{const file=input.files&&input.files[0];if(!file)return;if(file.size>5*1024*1024)return alert('Foto maksimal 5 MB.');const path=u.authId+'/izin-'+Date.now()+'.jpg';try{const up=await supabaseClient.storage.from('izin-bukti').upload(path,file,{contentType:file.type||'image/jpeg'});if(up.error)throw up.error;try{await DB.add('izin',{pegawaiId:u.id,authUserId:u.authId,tanggalMulai:start,tanggalSelesai:end,jenis:kind[0].toUpperCase()+kind.slice(1).toLowerCase(),alasan:reason,fotoPath:path,status:'menunggu'});}catch(e){await supabaseClient.storage.from('izin-bukti').remove([path]);throw e;}await refreshA();}catch(e){alert('Pengajuan izin gagal: '+e.message);}};input.click();
   }
+  function historyTreeA(rows, admin=false){
+    const years={};
+    rows.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))).forEach(x=>{
+      const y=String(x.tanggal).slice(0,4),m=String(x.tanggal).slice(5,7);
+      (years[y]??={})[m]??=[];
+      years[y][m].push(x);
+    });
+    return Object.entries(years).sort((a,b)=>b[0].localeCompare(a[0])).map(([y,months])=>
+      '<details class="card"><summary><b>Tahun '+escA(y)+'</b></summary>'+
+      Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,days])=>
+        '<details><summary>'+new Date(y+'-'+m+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'})+' ('+days.length+' catatan)</summary>'+
+        '<div class="table-wrap"><table><thead><tr><th>Tanggal</th>'+(admin?'<th>Pegawai</th>':'')+'<th>Masuk</th><th>Pulang</th><th>Detail</th></tr></thead><tbody>'+
+        days.map(x=>'<tr><td>'+new Date(x.tanggal+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</td>'+(admin?'<td>'+escA(namaPegawai(x.pegawaiId))+'</td>':'')+'<td>'+(x.masukAt?timeA(x.masukAt):'-')+'</td><td>'+(x.pulangAt?timeA(x.pulangAt):'-')+'</td><td><button class="btn tiny ghost" data-act="att-detail" data-id="'+escA(x.id)+'">Detail</button></td></tr>').join('')+
+        '</tbody></table></div></details>').join('')+'</details>'
+    ).join('')||'<section class="card"><p>Belum ada riwayat absensi.</p></section>';
+  }
   async function detailAttendanceA(id){
-    const x=DB.get('absensi',id);if(!x)return;
+    const x=DB.all('absensi').find(r=>String(r.id)===String(id));if(!x)return;
     const paths=[['Foto Masuk',x.masukFotoPath],['Foto Pulang',x.pulangFotoPath]];
     const blocks=await Promise.all(paths.map(async pair=>{if(!pair[1])return '<p><b>'+pair[0]+':</b> Belum ada foto.</p>';const r=await supabaseClient.storage.from('absensi-bukti').createSignedUrl(pair[1],300);return '<h4>'+pair[0]+'</h4>'+(r.data&&r.data.signedUrl?'<img src="'+escA(r.data.signedUrl)+'" alt="'+pair[0]+'" style="width:100%;max-height:360px;object-fit:contain">':'<p>Foto gagal dimuat.</p>');}));
     openInfo('Bukti Foto Absensi','<p><b>Pegawai:</b> '+escA(namaPegawai(x.pegawaiId))+'</p><p><b>Tanggal:</b> '+dateA(x.tanggal)+'</p><p><b>Waktu masuk:</b> '+timeA(x.masukAt)+'</p><p><b>Lokasi masuk:</b> '+escA(x.masukAlamat||'-')+'</p><p><b>Waktu pulang:</b> '+timeA(x.pulangAt)+'</p><p><b>Lokasi pulang:</b> '+escA(x.pulangAlamat||'-')+'</p>'+blocks.join('')+'<button class="btn ghost" data-tutup>Tutup</button>');
@@ -90,7 +106,7 @@
   PAGES.absensi=pageA;
   document.addEventListener('click',e=>{
     const b=e.target.closest('[data-act]');if(!b)return;
-    const id=Number(b.dataset.id);
+    const id=b.dataset.id;
     switch(b.dataset.act){
       case 'att-schedule':e.preventDefault();scheduleEditA();break;
       case 'att-photo-in':e.preventDefault();photoA('masuk');break;
