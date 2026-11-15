@@ -1258,7 +1258,6 @@ async function init() {
   $('#login-admin').onclick = () => pilihJenisLogin('admin');
   $('#login-pegawai').onclick = () => pilihJenisLogin('pegawai');
   $('#show-register').onclick = () => setAuthMode('register');
-  $('#show-login').onclick = () => setAuthMode('login');
   $('#forgot-form').onsubmit = kirimLinkResetPassword;
   $('#show-forgot').onclick = () => {
     $('#auth-login-area').classList.add('hidden');
