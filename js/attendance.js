@@ -131,7 +131,11 @@
   async function decideA(x,status){const note=prompt('Catatan admin (opsional)','')||'';try{await DB.update('izin',x.id,{status,catatanAdmin:note,diprosesOleh:me().authId,diprosesAt:new Date().toISOString()});tutupModal();await refreshA();}catch(e){alert('Gagal memproses izin: '+e.message);}}
   PAGES.absensi=pageA;
   PAGES.gudang=pageGudangAttendanceA;
-  document.addEventListener('submit',e=>{\n    if(e.target.matches('#att-schedule-form')){e.preventDefault();saveScheduleA(e.target);}\n    if(e.target.matches('.att-seed-use')){e.preventDefault();useSeedA(e.target);}\n  });\n  document.addEventListener('click',e=>{
+  document.addEventListener('submit',e=>{
+    if(e.target.matches('#att-schedule-form')){e.preventDefault();saveScheduleA(e.target);}
+    if(e.target.matches('.att-seed-use')){e.preventDefault();useSeedA(e.target);}
+  });
+  document.addEventListener('click',e=>{
     const b=e.target.closest('[data-act]');if(!b)return;
     const id=b.dataset.id;
     switch(b.dataset.act){
