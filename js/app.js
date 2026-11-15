@@ -588,18 +588,40 @@ function openLapor(jenisAwal = '', draftId = null) {
   if (existingDraft && existingDraft.data) {
     Object.entries(existingDraft.data).forEach(([key,value]) => { if (form.elements[key] && value != null) form.elements[key].value = value; });
     syncWorkFields();
+    if (existingDraft.data.fotoPath) {
+      info.textContent = 'Bukti foto dan GPS sudah tersimpan di Draft. Foto ini akan ikut dikirim.';
+      gpsInfo.textContent = 'Bukti foto tersimpan · ' + (existingDraft.data.fotoLokasi || 'Lokasi GPS tersimpan') + (existingDraft.data.fotoCapturedAt ? ' · ' + waktuLokal(new Date(existingDraft.data.fotoCapturedAt)) : '');
+    }
   }
   $('#lapor-simpan-draft').onclick = async () => {
     errBox.textContent = '';
     const f = form;
     const data = { tanggal:f.elements.tanggal.value, jenis:f.elements.jenis.value, lahanId:f.elements.lahanId.value || null, tanamanNama:f.elements.tanamanNama.value.trim(), luasM2:f.elements.luasM2.value || null, jumlahDitanam:f.elements.jumlahDitanam.value || null, umurTanamanHari:f.elements.umurTanamanHari.value || null, statusTanaman:f.elements.statusTanaman.value || null, panenKg:f.elements.panenKg.value || null, kualitasPanen:f.elements.kualitasPanen.value || null, benihBarangId:f.elements.benihBarangId.value || null, benihDipakai:f.elements.benihDipakai.value || null, deskripsi:f.elements.deskripsi.value.trim() };
     if (!data.tanggal || !data.jenis || !data.lahanId) { errBox.textContent='Isi tanggal, jenis kegiatan, dan lahan sebelum menyimpan draft.'; return; }
+    if (capturedBlob && capturedBlob.size > 5 * 1024 * 1024) { errBox.textContent='Ukuran foto melebihi 5 MB.'; return; }
     const btn=$('#lapor-simpan-draft'); btn.disabled=true; btn.textContent='Menyimpan...';
+    let uploadedPath = null;
     try {
+      if (capturedBlob && gps && capturedAt) {
+        uploadedPath = `${u.authId}/draft-${Date.now()}-${crypto.randomUUID()}.jpg`;
+        const { error } = await supabaseClient.storage.from('laporan-bukti').upload(uploadedPath, capturedBlob, {contentType:'image/jpeg',upsert:false});
+        if (error) throw error;
+        data.fotoPath = uploadedPath;
+        data.fotoLat = gps.lat; data.fotoLon = gps.lon; data.fotoAccuracy = gps.accuracy;
+        data.fotoLokasi = gps.place; data.fotoCapturedAt = capturedAt.toISOString();
+      } else if (existingDraft?.data?.fotoPath) {
+        for (const key of ['fotoPath','fotoLat','fotoLon','fotoAccuracy','fotoLokasi','fotoCapturedAt']) data[key] = existingDraft.data[key];
+      }
       if (draftId) await DB.update('laporanDraft', draftId, {data, updatedAt:new Date().toISOString()});
       else { const saved=await DB.add('laporanDraft',{pegawaiId:u.id,data}); draftId=saved.id; }
+      if (uploadedPath && existingDraft?.data?.fotoPath && existingDraft.data.fotoPath !== uploadedPath) {
+        await supabaseClient.storage.from('laporan-bukti').remove([existingDraft.data.fotoPath]);
+      }
       await DB.init(false); close(); render();
-    } catch(error) { errBox.textContent='Draft gagal disimpan: '+error.message; btn.disabled=false; btn.textContent='Simpan Draft'; }
+    } catch(error) {
+      if (uploadedPath) await supabaseClient.storage.from('laporan-bukti').remove([uploadedPath]);
+      errBox.textContent='Draft gagal disimpan: '+error.message; btn.disabled=false; btn.textContent='Simpan Draft';
+    }
   };
   $('#lapor-buka-kamera').onclick = async () => {
     errBox.textContent = '';
@@ -670,8 +692,11 @@ $('#lapor-ulang-foto').onclick = () => {
   $('#form-lapor-bukti').onsubmit = async e => {
     e.preventDefault(); errBox.textContent = '';
     const form = e.currentTarget, submit = form.querySelector('button[type="submit"]');
-    if (!capturedBlob || !gps || !capturedAt) { errBox.textContent = 'Wajib ambil foto langsung dari kamera beserta lokasi GPS.'; return; }
-    if (capturedBlob.size > 5 * 1024 * 1024) { errBox.textContent = 'Ukuran foto melebihi 5 MB.'; return; }
+    const savedProof = existingDraft?.data || {};
+    const proofGps = gps || (savedProof.fotoPath ? {lat:Number(savedProof.fotoLat),lon:Number(savedProof.fotoLon),accuracy:Number(savedProof.fotoAccuracy),place:savedProof.fotoLokasi} : null);
+    const proofCapturedAt = capturedAt || (savedProof.fotoCapturedAt ? new Date(savedProof.fotoCapturedAt) : null);
+    if ((!capturedBlob && !savedProof.fotoPath) || !proofGps || !proofCapturedAt) { errBox.textContent = 'Wajib ambil foto langsung dari kamera beserta lokasi GPS, lalu simpan Draft atau kirim.'; return; }
+    if (capturedBlob && capturedBlob.size > 5 * 1024 * 1024) { errBox.textContent = 'Ukuran foto melebihi 5 MB.'; return; }
     submit.disabled = true; submit.textContent = 'Mengirim...';
     const lahanId = form.elements.lahanId.value ? Number(form.elements.lahanId.value) : null;
     const lahan = lahanId ? DB.get('lahan',lahanId) : null;
@@ -688,10 +713,12 @@ $('#lapor-ulang-foto').onclick = () => {
     const barangBenih = benihBarangId ? DB.get('barang',benihBarangId) : null;
     if (benihBarangId && (!barangBenih || benihDipakai > Number(barangBenih.stok))) { errBox.textContent='Stok benih tidak mencukupi.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
     const data = { tanggal: form.elements.tanggal.value, jenis, lokasi: lahan.nama, lahanId, deskripsi: form.elements.deskripsi.value.trim(), tanamanNama:form.elements.tanamanNama.value.trim(), luasM2:jenis==='Penanaman'?luasM2:null, jumlahDitanam:jenis==='Penanaman'?jumlahDitanam:null, umurTanamanHari, statusTanaman:form.elements.statusTanaman.value||null, panenKg, kualitasPanen, benihBarangId, benihDipakai:benihBarangId?benihDipakai:null };
-    const path = `${u.authId}/${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const path = capturedBlob ? `${u.authId}/${Date.now()}-${crypto.randomUUID()}.jpg` : savedProof.fotoPath;
     try {
-      const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
-      if (uploadError) throw uploadError;
+      if (capturedBlob) {
+        const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
+        if (uploadError) throw uploadError;
+      }
       let reportSaved = false;
       try {
         const { error: saveError } = await supabaseClient.rpc('pegawai_kirim_laporan_lapangan', {
@@ -699,13 +726,13 @@ $('#lapor-ulang-foto').onclick = () => {
           p_tanaman_nama:data.tanamanNama, p_luas_m2:data.luasM2, p_jumlah_ditanam:data.jumlahDitanam, p_panen_kg:data.panenKg, p_kualitas_panen:data.kualitasPanen,
           p_umur_tanaman_hari:data.umurTanamanHari, p_status_tanaman:data.statusTanaman,
           p_benih_barang_id:data.benihBarangId, p_benih_dipakai:data.benihDipakai,
-          p_foto_path:path, p_foto_lat:gps.lat, p_foto_lon:gps.lon, p_foto_accuracy:gps.accuracy,
-          p_foto_lokasi:gps.place, p_foto_captured_at:capturedAt.toISOString()
+          p_foto_path:path, p_foto_lat:proofGps.lat, p_foto_lon:proofGps.lon, p_foto_accuracy:proofGps.accuracy,
+          p_foto_lokasi:proofGps.place, p_foto_captured_at:proofCapturedAt.toISOString()
         });
         if (saveError) throw saveError;
         reportSaved = true;
       } catch (error) {
-        if (!reportSaved) await supabaseClient.storage.from('laporan-bukti').remove([path]);
+        if (!reportSaved && capturedBlob) await supabaseClient.storage.from('laporan-bukti').remove([path]);
         throw error;
       }
       if (draftId) await DB.remove('laporanDraft', draftId);
