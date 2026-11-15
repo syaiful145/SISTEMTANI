@@ -760,10 +760,10 @@ function buatPasswordSementara(panjang = 14) {
 }
 
 function nomorWhatsApp(telepon) {
-  let nomor = String(telepon || '').replace(/\\D/g, '');
+  let nomor = String(telepon || '').replace(/\D/g, '');
   if (nomor.startsWith('0')) nomor = '62' + nomor.slice(1);
   else if (nomor.startsWith('8')) nomor = '62' + nomor;
-  return /^62\\d{8,13}$/.test(nomor) ? nomor : '';
+  return /^62\d{8,13}$/.test(nomor) ? nomor : '';
 }
 
 async function resetPasswordPegawai(id) {
