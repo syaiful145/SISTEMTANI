@@ -154,6 +154,8 @@ function formHTML(fields, v) {
       input = `<textarea name="${f.name}" rows="3" ${req}>${esc(val)}</textarea>`;
     } else if (f.type === 'image') {
       input = `${val ? `<img src="${val}" class="thumb-lg" alt="Foto">` : ''}<input type="file" accept="image/*" data-img="${f.name}">`;
+    } else if (f.type === 'file') {
+      input = `<input type="file" name="${f.name}" accept="image/jpeg,image/png,image/webp" ${req}>`;
     } else {
       input = `<input type="${f.type || 'text'}" name="${f.name}" value="${esc(val)}" step="${f.step || 'any'}" ${f.type === 'number' ? 'min="0"' : ''} ${req}>`;
     }
@@ -174,6 +176,9 @@ async function bacaForm(form, fields, lama) {
       } else {
         out[f.name] = lama[f.name] || '';
       }
+    } else if (f.type === 'file') {
+      out[f.name] = form.querySelector(`input[name="${f.name}"]`).files[0] || null;
+      if (f.req && !out[f.name]) throw new Error(`${f.label} wajib diunggah.`);
     } else {
       const raw = form.elements[f.name].value;
       if (f.req && raw === '') throw new Error(`${f.label} wajib diisi.`);
@@ -422,9 +427,22 @@ function openLapor() {
     { name: 'tanggal', label: 'Tanggal kegiatan', type: 'date', req: true, def: hariIni() },
     { name: 'jenis', label: 'Jenis kegiatan', type: 'select', options: JENIS_KEGIATAN, req: true },
     { name: 'lokasi', label: 'Lokasi lahan', req: true },
-    { name: 'deskripsi', label: 'Deskripsi kegiatan', type: 'textarea', req: true, full: true }
+    { name: 'deskripsi', label: 'Deskripsi kegiatan', type: 'textarea', req: true, full: true },
+    { name: 'foto', label: 'Foto bukti kegiatan (wajib, maks. 5 MB)', type: 'file', req: true, full: true }
   ], {}, async data => {
-    await DB.add('laporan', { pegawaiId: u.id, ...data, dibaca: false });
+    const file = data.foto;
+    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return 'Unggah foto JPG, PNG, atau WEBP sebagai bukti kegiatan.';
+    if (file.size > 5 * 1024 * 1024) return 'Ukuran foto maksimal 5 MB.';
+    const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' })[file.type];
+    const path = `${u.authId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, file, { contentType: file.type, upsert: false });
+    if (uploadError) throw new Error('Gagal mengunggah foto bukti: ' + uploadError.message);
+    try {
+      await DB.add('laporan', { pegawaiId: u.id, tanggal: data.tanggal, jenis: data.jenis, lokasi: data.lokasi, deskripsi: data.deskripsi, fotoPath: path, status: 'belum_diterima', dibaca: false });
+    } catch (error) {
+      await supabaseClient.storage.from('laporan-bukti').remove([path]);
+      throw error;
+    }
     await catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
     return null;
   });
@@ -569,9 +587,15 @@ function pageAktivitas() {
         ]), 'Belum ada laporan dari pegawai.')
   };
 }
-function detailLaporan(id) {
+async function detailLaporan(id) {
   const l = DB.get('laporan', id);
   if (!l) return alert('Laporan tidak ditemukan.');
+  let fotoHtml = '<p class="muted">Foto bukti tidak tersedia.</p>';
+  if (l.fotoPath) {
+    const { data, error } = await supabaseClient.storage.from('laporan-bukti').createSignedUrl(l.fotoPath, 300);
+    if (!error && data?.signedUrl) fotoHtml = `<img src="${esc(data.signedUrl)}" alt="Foto bukti laporan" style="width:100%;max-height:420px;object-fit:contain;border-radius:12px">`;
+    else fotoHtml = '<p class="form-error">Foto bukti gagal dimuat. Periksa izin penyimpanan.</p>';
+  }
   openInfo('Detail Laporan Pegawai', `
     <div class="detail-grid">
       <p><strong>Pegawai</strong><br>${esc(namaPegawai(l.pegawaiId))}</p>
@@ -581,6 +605,7 @@ function detailLaporan(id) {
       <p><strong>Status</strong><br>${l.status === 'diterima' ? 'Diterima' : 'Belum diterima'}</p>
       <p><strong>Deskripsi</strong><br>${esc(l.deskripsi)}</p>
     </div>
+    <h4>Foto Bukti Kegiatan</h4>${fotoHtml}
     <div class="form-actions"><button class="btn" data-tutup>Tutup</button></div>`);
   $('#modal [data-tutup]').onclick = tutupModal;
 }
