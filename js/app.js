@@ -723,12 +723,12 @@ function riwayatPegawai(id) {
 /* ===== Halaman ===== */
 function pageDashboard() {
   const t = DB.all('tanaman'), pn = DB.all('panen'), b = DB.all('barang'), p = DB.all('pegawai');
-  const totalKg = pn.reduce((s, x) => s + (x.kg || 0), 0);
+  const laporanPanen = DB.all('laporan').filter(x => x.jenis === 'Panen');\n  const totalKg = pn.reduce((s, x) => s + (x.kg || 0), 0) + laporanPanen.reduce((s,x)=>s+Number(x.panenKg||0),0);
   const kartu = [
     ['Total tanaman', t.length, 'jenis tanaman dikelola'],
     ['Sedang ditanam', t.filter(x => ['Ditanam', 'Dalam perawatan'].includes(x.status)).length, 'tanaman aktif di lahan'],
     ['Siap panen', t.filter(x => x.status === 'Siap panen').length, 'tanaman siap dipanen'],
-    ['Total hasil panen', `${rp(totalKg)} kg`, `${pn.length} kali panen tercatat`],
+    ['Total hasil panen', `${rp(totalKg)} kg`, `${pn.length + laporanPanen.length} kali panen tercatat`],
     ['Barang di gudang', b.length, 'jenis barang terdaftar'],
     ['Jumlah pegawai', p.length, 'tenaga kerja terdaftar']
   ];
@@ -816,7 +816,7 @@ function pageGudang() {
 
 function pagePekerjaan(jenis) {
   const admin=isAdmin();
-  const rows=DB.all('laporan').filter(l=>l.jenis===jenis).slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  const rows=DB.all('laporan').filter(l=>l.jenis===jenis && (admin || l.pegawaiId===me().id)).slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
   const btn=admin?'':'<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
   const body=jenis==='Panen'
     ? tabel(['Tanggal','Pegawai','Lahan','Tanaman','Hasil panen','Kualitas','Status','Detail'],
@@ -883,7 +883,7 @@ async function detailLaporan(id) {
       <p><strong>Jumlah ditanam</strong><br>${l.jumlahDitanam==null?'-':esc(l.jumlahDitanam)}</p>
       <p><strong>Umur tanaman</strong><br>${l.umurTanamanHari==null?'-':esc(l.umurTanamanHari)+' hari'}</p>
       <p><strong>Status tanaman</strong><br>${esc(l.statusTanaman||'-')}</p>
-      <p><strong>Benih dipakai</strong><br>${l.benihDipakai==null?'-':esc(l.benihDipakai)+' '+esc((DB.get('barang',l.benihBarangId)||{}).satuan||'')+' · '+esc((DB.get('barang',l.benihBarangId)||{}).nama||'')}</p>
+      <p><strong>Bahan dipakai</strong><br>${l.benihDipakai==null?'-':esc(l.benihDipakai)+' '+esc((DB.get('barang',l.benihBarangId)||{}).satuan||'')+' · '+esc((DB.get('barang',l.benihBarangId)||{}).nama||'')}</p>\n      <p><strong>Hasil panen</strong><br>${l.panenKg==null?'-':esc(l.panenKg)+' kg'}</p>\n      <p><strong>Kualitas panen</strong><br>${esc(l.kualitasPanen||'-')}</p>
       ${lokasiFoto}
     </div>
     <h4>Foto Bukti Kegiatan</h4>${fotoHtml}
@@ -1107,19 +1107,13 @@ function dataLaporan() {
       };
     }
     case 'panen': {
-      const rows = urut(DB.all('panen').filter(p => {
-        const pj = DB.get('penanaman', p.penanamanId);
-        return cocokTgl(p.tanggal) && (!pj || cocokJenis(pj.tanamanId));
-      }), 'tanggal');
-      const total = rows.reduce((s, x) => s + (x.kg || 0), 0);
+      const rows = urut(DB.all('laporan').filter(l=>l.jenis==='Panen' && cocokTgl(l.tanggal)), 'tanggal');
+      const total = rows.reduce((s,x)=>s+Number(x.panenKg||0),0);
       return {
         judul: 'Laporan Hasil Panen', file: 'laporan-panen',
         ringkas: `Total panen: ${rp(total)} kg dari ${rows.length} kali panen`,
-        kolom: ['Tanggal', 'Tanaman', 'Jenis', 'Hasil (kg)', 'Grade', 'Lokasi', 'Pemanen'],
-        baris: rows.map(p => {
-          const pj = DB.get('penanaman', p.penanamanId);
-          return [p.tanggal, tanamanDariPanen(p), pj ? jenisTanaman(pj.tanamanId) : '-', p.kg, p.kualitas, p.lokasi, namaPegawai(p.pegawaiId)];
-        })
+        kolom: ['Tanggal','Tanaman','Hasil (kg)','Grade','Lahan','Pemanen','Status'],
+        baris: rows.map(l=>[l.tanggal,l.tanamanNama,l.panenKg,l.kualitasPanen,l.lokasi,namaPegawai(l.pegawaiId),l.status])
       };
     }
     case 'stok':
