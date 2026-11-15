@@ -425,7 +425,7 @@ function cfgBarang() {
 function cfgPegawai() {
   return {
     judul: 'Data Pegawai',
-    tambah: false, ubah: true, hapus: true,
+    tambah: false, ubah: true, hapus: me()?.adminLevel === 'utama',
     nama: r => r.nama,
     extra: r => '<button class="btn tiny" data-act="detailPegawai" data-id="' + r.id + '">Detail</button>',
     kolom: [
@@ -1695,8 +1695,10 @@ function aksiKlik(e) {
     case 'edit': return openCrud(tbl, id);
     case 'hapus': {
       const cfg = CFG[tbl], row = DB.get(tbl, id);
+      if (tbl === 'pegawai' && me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang boleh menghapus data karyawan.');
+      if (!isAdmin()) return alert('Hanya administrator yang boleh menghapus data.');
       if (!row || !confirm('Hapus data ini? Tindakan ini tidak bisa dibatalkan.')) return;
-      DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); render(); }).catch(err => alert(err.message));
+      DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); await DB.init(true); render(); }).catch(err => alert(err.message));
       return;
     }
     case 'detailLahan': return detailLahan(id);
