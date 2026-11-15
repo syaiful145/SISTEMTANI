@@ -2007,6 +2007,7 @@ function pilihJenisLogin(role) {
   $('#register-access').classList.remove('hidden');
   $('#l-err').textContent = '';
 }
+window.pilihJenisLogin = pilihJenisLogin;
 
 async function kirimLinkResetPassword(e) {
   e.preventDefault();
