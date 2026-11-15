@@ -90,7 +90,8 @@ function menuVisible(m) {
   if (!u) return false;
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
-  if (m.id === 'gudang') return true; // Pegawai boleh melihat sisa stok benih meski tidak diberi hak mengelola gudang.
+  if (m.id === 'penanaman' || m.id === 'panen') return false; // Pekerjaan lapangan dikirim melalui Laporan Harian.
+  if (m.id === 'gudang') return true; // Pegawai hanya melihat sisa stok benih.
   return !m.akses || u.akses.includes(m.akses);
 }
 
@@ -989,11 +990,11 @@ function dataLaporan() {
       };
     }
     case 'perkembangan': {
-      const rows = urut(DB.all('tanaman').filter(t => cocokTgl(t.tanggalTanam) && (!LAP.jenisTanaman || t.jenis === LAP.jenisTanaman)), 'tanggalTanam');
+      const rows = urut(DB.all('laporan').filter(l => cocokTgl(l.tanggal) && l.tanamanNama), 'tanggal');
       return {
-        judul: 'Laporan Perkembangan Tanaman', file: 'laporan-perkembangan',
-        kolom: ['Tanaman', 'Jenis', 'Lokasi', 'Tgl tanam', 'Umur (hari)', 'Luas (ha)', 'Jumlah', 'Status', 'Prediksi panen'],
-        baris: rows.map(t => [t.nama, t.jenis, t.lokasi, t.tanggalTanam, selisih(hariIni(), t.tanggalTanam), t.luas, t.jumlah, t.status, addDays(t.tanggalTanam, t.umurPanen)])
+        judul: 'Laporan Perkembangan Tanaman dari Pegawai', file: 'laporan-perkembangan',
+        kolom: ['Tanggal', 'Pegawai', 'Tanaman', 'Lokasi', 'Luas (m²)', 'Jumlah ditanam', 'Umur (hari)', 'Status', 'Kegiatan'],
+        baris: rows.map(l => [l.tanggal, namaPegawai(l.pegawaiId), l.tanamanNama, l.lokasi, l.luasM2 ?? '-', l.jumlahDitanam ?? '-', l.umurTanamanHari ?? '-', l.statusTanaman || '-', l.jenis])
       };
     }
     case 'panen': {
