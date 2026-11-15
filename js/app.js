@@ -426,6 +426,20 @@ function stopLaporCamera() {
   if (LAPOR_CAMERA_STREAM) LAPOR_CAMERA_STREAM.getTracks().forEach(track => track.stop());
   LAPOR_CAMERA_STREAM = null;
 }
+async function namaLokasiGPS(lat, lon) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1`;
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error('Layanan alamat tidak tersedia');
+    const data = await response.json();
+    const a = data.address || {};
+    const bagian = [a.road || a.pedestrian || a.path, a.suburb || a.neighbourhood || a.village || a.hamlet, a.city || a.town || a.county || a.state_district, a.state].filter(Boolean);
+    return bagian.length ? [...new Set(bagian)].join(', ') : (data.display_name || 'Nama lokasi tidak ditemukan');
+  } catch (e) {
+    console.warn('Reverse geocoding gagal:', e);
+    return 'Nama lokasi tidak tersedia (koordinat GPS tetap tersimpan)';
+  }
+}
 function waktuLokal(d) {
   return d.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'medium' });
 }
@@ -485,7 +499,7 @@ function openLapor() {
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, w, h);
-      const band = Math.max(100, Math.round(h * 0.16));
+      const band = Math.max(150, Math.round(h * 0.23));
       ctx.fillStyle = 'rgba(0,0,0,0.68)'; ctx.fillRect(0, h - band, w, band);
       const scale = Math.max(18, Math.round(w / 42));
       ctx.fillStyle = '#fff'; ctx.font = `bold ${scale}px sans-serif`;
@@ -498,7 +512,7 @@ function openLapor() {
         video.style.display = 'none'; canvas.style.display = 'block';
         stopLaporCamera();
         info.textContent = 'Foto berhasil diambil dengan cap waktu dan lokasi.';
-        gpsInfo.textContent = `Lokasi: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} · Akurasi ±${Math.round(gps.accuracy)} meter · ${waktuLokal(capturedAt)}`;
+        gpsInfo.textContent = `Nama lokasi: ${gps.place} · Koordinat: ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)} · Akurasi ±${Math.round(gps.accuracy)} meter · ${waktuLokal(capturedAt)}`;
         $('#lapor-ulang-foto').style.display = 'inline-flex';
       }, 'image/jpeg', 0.88);
     }, e => {
@@ -528,7 +542,7 @@ function openLapor() {
       const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
       if (uploadError) throw uploadError;
       try {
-        await DB.add('laporan', { pegawaiId: u.id, ...data, fotoPath: path, fotoLat: gps.lat, fotoLon: gps.lon, fotoAccuracy: gps.accuracy, fotoCapturedAt: capturedAt.toISOString(), status: 'belum_diterima', dibaca: false });
+        await DB.add('laporan', { pegawaiId: u.id, ...data, fotoPath: path, fotoLat: gps.lat, fotoLon: gps.lon, fotoAccuracy: gps.accuracy, fotoLokasi: gps.place, fotoCapturedAt: capturedAt.toISOString(), status: 'belum_diterima', dibaca: false });
       } catch (error) {
         await supabaseClient.storage.from('laporan-bukti').remove([path]); throw error;
       }
@@ -689,7 +703,7 @@ async function detailLaporan(id) {
     if (!error && data?.signedUrl) fotoHtml = `<img src="${esc(data.signedUrl)}" alt="Foto bukti laporan" style="width:100%;max-height:420px;object-fit:contain;border-radius:12px">`;
     else fotoHtml = '<p class="form-error">Foto bukti gagal dimuat. Periksa izin penyimpanan.</p>';
   }
-  const lokasiFoto = l.fotoLat != null && l.fotoLon != null ? `<p><strong>Lokasi GPS foto</strong><br>${Number(l.fotoLat).toFixed(6)}, ${Number(l.fotoLon).toFixed(6)} (akurasi ±${Math.round(Number(l.fotoAccuracy || 0))} m)</p><p><strong>Waktu foto</strong><br>${esc(l.fotoCapturedAt ? waktuLokal(new Date(l.fotoCapturedAt)) : '-')}</p>` : '';
+  const lokasiFoto = l.fotoLat != null && l.fotoLon != null ? `<p><strong>Nama lokasi foto</strong><br>${esc(l.fotoLokasi || 'Tidak tersedia')}</p><p><strong>Koordinat GPS foto</strong><br>${Number(l.fotoLat).toFixed(6)}, ${Number(l.fotoLon).toFixed(6)} (akurasi ±${Math.round(Number(l.fotoAccuracy || 0))} m)</p><p><strong>Waktu foto</strong><br>${esc(l.fotoCapturedAt ? waktuLokal(new Date(l.fotoCapturedAt)) : '-')}</p>` : '';
   openInfo('Detail Laporan Pegawai', `
     <div class="detail-grid">
       <p><strong>Pegawai</strong><br>${esc(namaPegawai(l.pegawaiId))}</p>
