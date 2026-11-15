@@ -365,14 +365,17 @@ function cfgBarang() {
 function cfgPegawai() {
   return {
     judul: 'Data Pegawai',
-    tambah: true, ubah: true, hapus: true,
+    tambah: false, ubah: true, hapus: true,
     nama: r => r.nama,
-    extra: r => `<button class="btn tiny ghost" data-act="riwayat" data-id="${r.id}">Riwayat</button>`,
+    extra: r => `${r.statusVerifikasi === 'menunggu' ? `<button class="btn tiny" data-act="setujuiPegawai" data-id="${r.id}">Setujui</button> <button class="btn tiny danger" data-act="tolakPegawai" data-id="${r.id}">Tolak</button>` : ''} <button class="btn tiny ghost" data-act="riwayat" data-id="${r.id}">Riwayat</button>`,
     kolom: [
       { h: 'Nama', f: r => esc(r.nama) },
       { h: 'ID', f: r => esc(r.idPegawai) },
       { h: 'Jabatan', f: r => esc(r.jabatan) },
-      { h: 'Telepon', f: r => esc(r.telepon) },
+      { h: 'Email', f: r => esc(r.email || '-') },
+      { h: 'Username', f: r => esc(r.username || '-') },
+      { h: 'WhatsApp', f: r => esc(r.telepon || '-') },
+      { h: 'Status verifikasi', f: r => esc(r.statusVerifikasi || 'menunggu') },
       { h: 'Status kerja', f: r => esc(r.statusKerja) },
       { h: 'Akses', f: r => (r.akses || []).map(a => `<span class="tag">${AKSES[a]}</span>`).join(' ') || '<span class="muted">Laporan harian saja</span>' }
     ],
@@ -383,17 +386,9 @@ function cfgPegawai() {
       { name: 'telepon', label: 'Nomor telepon', type: 'tel', req: true },
       { name: 'alamat', label: 'Alamat', type: 'textarea', full: true },
       { name: 'statusKerja', label: 'Status kepegawaian', type: 'select', options: ['Tetap', 'Kontrak', 'Harian'], req: true },
-      { name: 'username', label: 'Username login', req: true },
-      { name: 'password', label: isEdit ? 'Password baru (kosongkan jika tidak diubah)' : 'Password', req: !isEdit },
       { name: 'akses', label: 'Fitur yang diizinkan admin', type: 'checks', full: true, options: [['penanaman', 'Penanaman'], ['panen', 'Panen'], ['gudang', 'Gudang']] }
     ],
-    validasi: (d, lama, id) => {
-      if (d.username === 'admin' || DB.all('pegawai').some(p => p.username === d.username && p.id !== id)) {
-        return 'Username sudah dipakai. Pilih username lain.';
-      }
-      if (id && !d.password) d.password = lama.password;
-      return null;
-    }
+    validasi: () => null
   };
 }
 
@@ -756,6 +751,29 @@ function pageKalender() {
   };
 }
 
+
+async function prosesVerifikasiPegawai(id, status) {
+  let alasan = null;
+  if (status === 'ditolak') {
+    alasan = prompt('Masukkan alasan penolakan pendaftaran pegawai:');
+    if (alasan === null) return;
+    alasan = alasan.trim();
+    if (!alasan) { alert('Alasan penolakan wajib diisi.'); return; }
+  }
+  if (!confirm(status === 'disetujui' ? 'Setujui akun pegawai ini?' : 'Tolak pendaftaran pegawai ini?')) return;
+  try {
+    const { error } = await supabaseClient.rpc('admin_verifikasi_pegawai', {
+      p_pegawai_id: id, p_status: status, p_alasan: alasan
+    });
+    if (error) throw error;
+    await DB.init(true);
+    alert(status === 'disetujui' ? 'Pegawai berhasil disetujui.' : 'Pendaftaran pegawai ditolak.');
+    render();
+  } catch (err) {
+    alert('Gagal memproses verifikasi: ' + (err.message || 'Kesalahan tidak diketahui'));
+  }
+}
+
 /* ===== Router & render ===== */
 const PAGES = {
   dashboard: pageDashboard,
@@ -822,6 +840,8 @@ function aksiKlik(e) {
       return;
     }
     case 'riwayat': return riwayatPegawai(id);
+    case 'setujuiPegawai': return prosesVerifikasiPegawai(id, 'disetujui');
+    case 'tolakPegawai': return prosesVerifikasiPegawai(id, 'ditolak');
     case 'transaksi': return openTransaksi();
     case 'lapor': return openLapor();
     case 'kal': geserKal(Number(b.dataset.d)); return render();
@@ -875,6 +895,7 @@ async function daftarPegawai(e) {
   const nama = $('#r-nama').value.trim();
   const idPegawai = $('#r-id').value.trim();
   const email = $('#r-email').value.trim();
+  const username = $('#r-username').value.trim().toLowerCase();
   const jabatan = $('#r-jabatan').value.trim();
   const telepon = $('#r-telepon').value.trim();
   const alamat = $('#r-alamat').value.trim();
@@ -882,6 +903,11 @@ async function daftarPegawai(e) {
   const ulangi = $('#r-pass2').value;
   const msg = $('#r-msg');
   msg.classList.remove('error');
+  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+    msg.textContent = 'Username harus 3–30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.';
+    msg.classList.add('error');
+    return;
+  }
   if (password !== ulangi) {
     msg.textContent = 'Konfirmasi password tidak sama.';
     msg.classList.add('error');
@@ -895,14 +921,14 @@ async function daftarPegawai(e) {
     const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
-      options: { data: { nama, id_pegawai: idPegawai, jabatan, telepon, alamat } }
+      options: { data: { nama, username, id_pegawai: idPegawai, jabatan, telepon, alamat } }
     });
     if (error) throw error;
     if (!data.user) throw new Error('Pendaftaran belum berhasil. Silakan coba lagi.');
     $('#register-form').reset();
     msg.textContent = data.session
-      ? 'Pendaftaran terkirim. Akun menunggu verifikasi admin sebelum dapat digunakan.'
-      : 'Pendaftaran terkirim. Periksa email untuk verifikasi akun. Setelah itu admin akan memeriksa pendaftaran pegawai.';
+      ? 'Pendaftaran berhasil. Akun menunggu persetujuan admin sebelum dapat digunakan.'
+      : 'Pendaftaran dibuat, tetapi konfirmasi email Supabase masih aktif. Admin perlu menonaktifkan konfirmasi email agar alur tanpa OTP dapat digunakan.';
   } catch (err) {
     msg.textContent = err.message || 'Pendaftaran gagal. Periksa data dan koneksi, lalu coba lagi.';
     msg.classList.add('error');
