@@ -18,7 +18,7 @@
         <button type="button" class="auth-tab" id="show-register">Daftar Pegawai</button>
       </div>
       <form id="login-form" autocomplete="on">
-        <input id="l-user" placeholder="Username" autocomplete="username" required>
+        <input id="l-user" type="email" placeholder="Email akun" autocomplete="username" required>
         <input id="l-pass" type="password" placeholder="Password" autocomplete="current-password" required>
         <p id="l-err" class="form-error" role="alert"></p>
         <button class="btn" type="submit">Masuk</button>
@@ -26,16 +26,17 @@
       <form id="register-form" class="hidden" autocomplete="on">
         <input id="r-nama" placeholder="Nama lengkap" autocomplete="name" required>
         <input id="r-id" placeholder="ID pegawai" required>
+        <input id="r-username" placeholder="Username pegawai" autocomplete="username" required>
         <input id="r-email" type="email" placeholder="Email aktif" autocomplete="email" required>
         <input id="r-jabatan" placeholder="Jabatan" required>
-        <input id="r-telepon" type="tel" placeholder="Nomor telepon" autocomplete="tel" required>
+        <input id="r-telepon" type="tel" placeholder="Nomor WhatsApp aktif" autocomplete="tel" required>
         <input id="r-alamat" placeholder="Alamat" autocomplete="street-address" required>
         <input id="r-pass" type="password" placeholder="Buat password (minimal 8 karakter)" autocomplete="new-password" minlength="8" required>
         <input id="r-pass2" type="password" placeholder="Ulangi password" autocomplete="new-password" minlength="8" required>
         <p id="r-msg" class="form-message" role="status"></p>
         <button class="btn" type="submit">Kirim Pendaftaran</button>
       </form>
-      <p class="login-hint" id="login-hint">Akun demo lokal: admin / admin123 · budi / budi123 · siti / siti123</p>
+      <p class="login-hint" id="login-hint">Login menggunakan email dan password yang terdaftar.</p>
     </div>
   </section>
 
