@@ -415,7 +415,7 @@ function cfgBarang() {
     tambah: isAdmin(), ubah: isAdmin(), hapus: isAdminUtama(),
     labelTambah: '+ Tambah Barang',
     nama: r => r.nama,
-    extra: r => '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+r.id+'">Detail</button>',
+    extra: r => (isAdmin() ? '<button class="btn tiny" data-act="transaksiMasuk" data-id="'+r.id+'">+ Masuk</button><button class="btn tiny danger" data-act="transaksiKeluar" data-id="'+r.id+'">− Keluar</button>' : '') + '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+r.id+'">Detail</button>',
     kolom: [
       { h: 'Kode', f: r => esc(r.kode) },
       { h: 'Nama barang', f: r => esc(r.nama) },
