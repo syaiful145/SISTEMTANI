@@ -707,7 +707,7 @@ function pageGudang() {
   const bawah = `<div class="card">
     <div class="page-head"><h3>Riwayat transaksi stok</h3>
       <div class="page-actions">${bisa('gudang') ? '<button class="btn" data-act="transaksi">+ Catat transaksi</button>' : ''}</div></div>
-    ${tabel(['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Penanaman', 'Keterangan'], trx.map(t => {
+    ${tabel(['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Penanaman / Laporan', 'Pegawai', 'Keterangan'], trx.map(t => {
       const brg = DB.get('barang', t.barangId) || {};
       const pj = DB.get('penanaman', t.penanamanId);
       return [
@@ -715,7 +715,8 @@ function pageGudang() {
         esc(brg.nama || '-'),
         t.jenis === 'Masuk' ? '<span class="tag green">Masuk</span>' : '<span class="tag red">Keluar</span>',
         `${rp(t.jumlah)} ${esc(brg.satuan || '')}`,
-        pj ? esc(penanamanLabel(pj)) : '-',
+        pj ? esc(penanamanLabel(pj)) : (t.laporanId ? 'Laporan #' + esc(t.laporanId) : '-'),
+        t.pegawaiId ? esc(namaPegawai(t.pegawaiId)) : '-',
         esc(t.keterangan)
       ];
     }), 'Belum ada transaksi.')}
