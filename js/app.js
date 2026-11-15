@@ -795,7 +795,7 @@ async function resetPasswordPegawai(id) {
     const nomor = nomorWhatsApp(pegawai.telepon);
     const pesanWA = `Halo ${pegawai.nama}, password sementara akun SIMTANI Anda: ${temporaryPassword}. Silakan login menggunakan email terdaftar, lalu segera buat password baru setelah berhasil masuk.`;
     const tautanWA = nomor
-      ? `https://wa.me/${nomor}?text=${encodeURIComponent(pesanWA)}`
+      ? `https://api.whatsapp.com/send?phone=${nomor}&text=${encodeURIComponent(pesanWA)}`
       : '';
 
     openInfo(`Password sementara · ${pegawai.nama}`, `
