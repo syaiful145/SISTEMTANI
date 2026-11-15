@@ -874,39 +874,39 @@ function pagePupuk() {
 }
 
 function pageGudang() {
-  const b = DB.all('barang');
-  const menipis = b.filter(x => x.stok <= x.minStok);
-  const trx = DB.all('transaksi').slice().sort((a, c) => c.id - a.id).slice(0, 100);
-  const totalMasuk=trx.filter(t=>t.jenis==='Masuk').reduce((n,t)=>n+Number(t.jumlah||0),0);
-  const totalKeluar=trx.filter(t=>t.jenis==='Keluar').reduce((n,t)=>n+Number(t.jumlah||0),0);
-  const bawah = `<div class="card">
-    <div class="alert">Gudang menampilkan stok Bibit, Pupuk, dan Hasil Panen. Hasil panen yang diterima Admin otomatis menambah stok. Pilih tombol Detail pada barang untuk melihat jumlah masuk, jumlah keluar, dan riwayatnya.</div>
-    <div class="page-head"><h3>Riwayat barang masuk dan keluar</h3>
-      <div class="page-actions">${bisa('gudang') ? '<button class="btn" data-act="transaksi">+ Catat transaksi</button>' : ''}</div></div>
-    <div class="stats-grid"><div class="stat"><span>Total masuk (100 transaksi terbaru)</span><strong>${rp(totalMasuk)}</strong></div><div class="stat"><span>Total keluar (100 transaksi terbaru)</span><strong>${rp(totalKeluar)}</strong></div><div class="stat"><span>Jenis barang</span><strong>${b.length}</strong></div></div>
-    ${tabel(['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Penanaman / Laporan', 'Pegawai', 'Keterangan','Detail'], trx.map(t => {
-      const brg = DB.get('barang', t.barangId) || {};
-      const pj = DB.get('penanaman', t.penanamanId);
-      return [
-        tgl(t.tanggal),
-        esc(brg.nama || '-'),
-        t.jenis === 'Masuk' ? '<span class="tag green">Masuk</span>' : '<span class="tag red">Keluar</span>',
-        `${rp(t.jumlah)} ${esc(brg.satuan || '')}`,
-        pj ? esc(penanamanLabel(pj)) : (t.laporanId ? 'Laporan #' + esc(t.laporanId) : '-'),
-        t.pegawaiId ? esc(namaPegawai(t.pegawaiId)) : '-',
-        esc(t.keterangan),
-        '<div class="row-actions"><button class="btn tiny ghost" data-act="detailBarang" data-id="'+brg.id+'">Detail barang</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusRiwayat" data-tbl="transaksi" data-id="'+t.id+'">Hapus</button>':'')+'</div>'
-      ];
-    }), 'Belum ada transaksi.')}
-  </div>`;
-  const cfg = cfgBarang();
-  cfg.catatan = menipis.length
-    ? `<div class="alert">⚠️ ${menipis.length} barang stoknya menipis: ${menipis.map(x => esc(x.nama)).join(', ')}</div>`
-    : '';
-  cfg.bawah = bawah;
-  return { html: crud('barang', cfg) };
+  const barang = DB.all('barang').slice().sort((a,b) => String(a.kategori||'').localeCompare(String(b.kategori||'')) || String(a.nama||'').localeCompare(String(b.nama||'')));
+  const transaksi = DB.all('transaksi').slice().sort((a,b) => String(b.tanggal||'').localeCompare(String(a.tanggal||'')) || b.id-a.id).slice(0,100);
+  const kategoriUtama = ['Bibit','Pupuk','Hasil Panen'];
+  const ringkasan = kategoriUtama.map(k => {
+    const items = barang.filter(x => String(x.kategori||'').toLowerCase() === k.toLowerCase());
+    const total = items.reduce((n,x) => n + Number(x.stok||0), 0);
+    const satuan = [...new Set(items.map(x => x.satuan).filter(Boolean))];
+    return '<div class="stat"><span>'+esc(k)+'</span><strong>'+rp(total)+'</strong><small>'+items.length+' jenis barang'+(satuan.length===1?' · '+esc(satuan[0]):'')+'</small></div>';
+  }).join('');
+  const barisBarang = barang.map(b => [
+    '<strong>'+esc(b.nama)+'</strong><div class="muted">'+esc(b.kode||'')+'</div>',
+    esc(b.kategori||'-'),
+    '<strong class="'+(Number(b.stok)<=Number(b.minStok)?'text-red':'')+'">'+rp(b.stok)+' '+esc(b.satuan||'')+'</strong>',
+    Number(b.stok)<=Number(b.minStok)?'<span class="tag red">Stok menipis</span>':'<span class="tag green">Tersedia</span>',
+    '<div class="row-actions">'+(isAdmin()?'<button class="btn tiny" data-act="transaksiMasuk" data-id="'+b.id+'">+ Masuk</button><button class="btn tiny danger" data-act="transaksiKeluar" data-id="'+b.id+'">− Keluar</button>':'')+'<button class="btn tiny ghost" data-act="detailBarang" data-id="'+b.id+'">Detail</button></div>'
+  ]);
+  const totalMasuk = transaksi.filter(t=>t.jenis==='Masuk').reduce((n,t)=>n+Number(t.jumlah||0),0);
+  const totalKeluar = transaksi.filter(t=>t.jenis==='Keluar').reduce((n,t)=>n+Number(t.jumlah||0),0);
+  const riwayat = tabel(['Tanggal','Barang','Jenis','Jumlah','Keterangan','Detail'],transaksi.map(t=>{
+    const b=DB.get('barang',t.barangId)||{};
+    return [tgl(t.tanggal),esc(b.nama||'-'),t.jenis==='Masuk'?'<span class="tag green">Masuk</span>':'<span class="tag red">Keluar</span>',rp(t.jumlah)+' '+esc(b.satuan||''),esc(t.keterangan||'-'),'<button class="btn tiny ghost" data-act="detailBarang" data-id="'+(b.id||'')+'">Detail</button>'];
+  }),'Belum ada transaksi barang masuk atau keluar.');
+  return { html:
+    head('Gudang', (isAdmin()?'<button class="btn" data-act="tambah" data-tbl="barang">+ Tambah Barang</button>':''))+
+    '<p class="muted">Kelola stok Bibit, Pupuk, dan Hasil Panen dari halaman ini. Gunakan tombol Masuk atau Keluar pada barang yang sesuai. Data dan riwayat lama tetap dipertahankan.</p>'+
+    '<div class="stats-grid">'+ringkasan+'</div>'+
+    '<div class="card"><div class="page-head"><h3>Daftar stok barang</h3><span class="muted">'+barang.length+' jenis barang</span></div>'+
+    tabel(['Nama barang','Kategori','Stok saat ini','Kondisi stok','Aksi'],barisBarang,'Belum ada barang di gudang.')+'</div>'+
+    '<div class="card"><div class="page-head"><h3>Riwayat barang masuk dan keluar</h3></div>'+
+    '<div class="stats-grid"><div class="stat"><span>Total masuk · 100 transaksi terbaru</span><strong>'+rp(totalMasuk)+'</strong></div><div class="stat"><span>Total keluar · 100 transaksi terbaru</span><strong>'+rp(totalKeluar)+'</strong></div></div>'+
+    riwayat+'</div>'
+  };
 }
-
 function pagePekerjaan(jenis) {
   const admin = isAdmin();
   const rows = DB.all('laporan')
