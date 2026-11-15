@@ -596,16 +596,23 @@ $('#lapor-ulang-foto').onclick = () => {
     try {
       const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
       if (uploadError) throw uploadError;
+      let reportSaved = false;
       try {
-        const saved = await DB.add('laporan', { pegawaiId: u.id, ...data, fotoPath: path, fotoLat: gps.lat, fotoLon: gps.lon, fotoAccuracy: gps.accuracy, fotoLokasi: gps.place, fotoCapturedAt: capturedAt.toISOString(), status: 'belum_diterima', dibaca: false });
-        if (benihBarangId) {
-          const { error: stockError } = await supabaseClient.rpc('pegawai_gunakan_benih_laporan', { p_barang_id:benihBarangId, p_jumlah:benihDipakai, p_keterangan:data.deskripsi, p_laporan_id:saved.id });
-          if (stockError) { await DB.remove('laporan',saved.id); throw stockError; }
-          await DB.init(false);
-        }
+        const { error: saveError } = await supabaseClient.rpc('pegawai_kirim_laporan_lapangan', {
+          p_tanggal:data.tanggal, p_jenis:data.jenis, p_lokasi:data.lokasi, p_deskripsi:data.deskripsi,
+          p_tanaman_nama:data.tanamanNama, p_luas_m2:data.luasM2, p_jumlah_ditanam:data.jumlahDitanam,
+          p_umur_tanaman_hari:data.umurTanamanHari, p_status_tanaman:data.statusTanaman,
+          p_benih_barang_id:data.benihBarangId, p_benih_dipakai:data.benihDipakai,
+          p_foto_path:path, p_foto_lat:gps.lat, p_foto_lon:gps.lon, p_foto_accuracy:gps.accuracy,
+          p_foto_lokasi:gps.place, p_foto_captured_at:capturedAt.toISOString()
+        });
+        if (saveError) throw saveError;
+        reportSaved = true;
       } catch (error) {
-        await supabaseClient.storage.from('laporan-bukti').remove([path]); throw error;
+        if (!reportSaved) await supabaseClient.storage.from('laporan-bukti').remove([path]);
+        throw error;
       }
+      await DB.init(false);
       await catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
       close(); render();
     } catch (error) {
