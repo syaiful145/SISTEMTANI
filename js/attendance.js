@@ -27,7 +27,9 @@
       return {html:head('Absensi Pegawai',action)+'<section class="card"><h3>Jadwal Kerja</h3><p>Masuk <b>'+escA(String(sched.jamMasuk).slice(0,5))+'</b> · Pulang <b>'+escA(String(sched.jamPulang).slice(0,5))+'</b></p><p>Toleransi terlambat: '+Number(sched.toleransiTerlambat||0)+' menit</p><p>Status hari ini: '+tagA(state)+'</p><button class="btn ghost" data-act="att-leave">+ Ajukan Izin / Sakit</button></section>'+
       (onLeave?'<section class="card"><h3>Status Hari Ini</h3><p>'+tagA('Izin')+'</p><p>Pengajuan izin/sakit telah disetujui. Pegawai tidak perlu melakukan absensi hari ini.</p></section>':r?'<section class="card"><h3>Absensi Hari Ini</h3><p>Masuk: '+timeA(r.masukAt)+'</p><p>Pulang: '+timeA(r.pulangAt)+'</p><p>Lokasi masuk: '+escA(r.masukAlamat||'-')+'</p><p>Lokasi pulang: '+escA(r.pulangAlamat||'-')+'</p></section>':'<section class="card"><p>Belum ada catatan absensi hari ini.</p></section>')+
       (own.length?'<h3>Riwayat Absensi</h3>'+historyTreeA(own):'')+
-      '<h3>Riwayat Pengajuan Izin</h3>'+(mine.length?leaveTreeA(mine,false):'<p class="muted">Belum ada pengajuan izin.</p>')};
+      '<section class="card" id="riwayat-pengajuan-izin"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h3 style="margin:0">Riwayat Pengajuan Izin</h3><p class="muted">'+mine.length+' pengajuan tersimpan</p></div><button class="btn tiny ghost" data-act="att-leave-history">Lihat Riwayat</button></div>'+
+      (mine.length?mine.slice(0,3).map(x=>'<p><b>'+dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai)+'</b> · '+escA(x.jenis)+' · '+tagA(x.status)+'</p>').join(''):'<p class="muted">Belum ada pengajuan izin atau sakit.</p>')+'</section>'+
+      (mine.length?leaveTreeA(mine,false):'')};
     }
     const staff=DB.all('pegawai').filter(x=>x.statusVerifikasi==='disetujui'), todayRows=DB.all('absensi').filter(x=>x.tanggal===today);
     const approved=leaves.filter(x=>x.status==='disetujui'&&x.tanggalMulai<=today&&x.tanggalSelesai>=today);
@@ -162,6 +164,7 @@
       case 'att-history-month':e.preventDefault();historyMonthA(b.dataset.year,b.dataset.month,isAdmin());break;
       case 'att-leave-year':e.preventDefault();leaveYearA(b.dataset.year,b.dataset.admin==='1');break;
       case 'att-leave-month':e.preventDefault();leaveMonthA(b.dataset.year,b.dataset.month,b.dataset.admin==='1');break;
+      case 'att-leave-history':e.preventDefault();if(!DB.all('izin').some(x=>String(x.pegawaiId)===String(me().id)))openInfo('Riwayat Pengajuan Izin','<p>Belum ada pengajuan izin atau sakit.</p><button class="btn ghost" data-tutup>Tutup</button>');else leaveYearA([...new Set(DB.all('izin').filter(x=>String(x.pegawaiId)===String(me().id)).map(x=>String(x.tanggalMulai).slice(0,4)))].sort().reverse()[0],false);break;
     }
   });
 })();
