@@ -8,35 +8,41 @@
 </head>
 <body>
 
-  <!-- Halaman login -->
+  <!-- Halaman login SIMTANI -->
   <section id="login-page">
-    <div class="login-card">
-      <h1>Sistem Pertanian</h1>
-      <p class="muted">Silakan masuk atau daftarkan akun pegawai.</p>
-      <div class="auth-tabs" role="tablist" aria-label="Pilihan akun">
-        <button type="button" class="auth-tab active" id="show-login">Login</button>
-        <button type="button" class="auth-tab" id="show-register">Daftar Pegawai</button>
+    <div class="login-card login-card-modern">
+      <div class="login-brand-mark">🌾</div>
+      <p class="login-eyebrow">SISTEM INFORMASI MANAJEMEN PERTANIAN</p>
+      <h1 id="login-title">Login Pegawai</h1>
+      <p class="muted" id="login-description">Masuk menggunakan email dan password akun pegawai.</p>
+      <div class="login-role-switch" aria-label="Pilih jenis akun">
+        <button type="button" class="login-role" id="login-pegawai">👨‍🌾 Pegawai</button>
+        <button type="button" class="login-role" id="login-admin">🛡️ Admin</button>
       </div>
-      <form id="login-form" autocomplete="on">
-        <input id="l-user" type="email" placeholder="Email akun" autocomplete="username" required>
-        <input id="l-pass" type="password" placeholder="Password" autocomplete="current-password" required>
-        <p id="l-err" class="form-error" role="alert"></p>
-        <button class="btn" type="submit">Masuk</button>
-      </form>
-      <form id="register-form" class="hidden" autocomplete="on">
-        <input id="r-nama" placeholder="Nama lengkap" autocomplete="name" required>
-        <input id="r-id" placeholder="ID pegawai" required>
-        <input id="r-username" placeholder="Username pegawai" autocomplete="username" required>
-        <input id="r-email" type="email" placeholder="Email aktif" autocomplete="email" required>
-        <input id="r-jabatan" placeholder="Jabatan" required>
-        <input id="r-telepon" type="tel" placeholder="Nomor WhatsApp aktif" autocomplete="tel" required>
-        <input id="r-alamat" placeholder="Alamat" autocomplete="street-address" required>
-        <input id="r-pass" type="password" placeholder="Buat password (minimal 8 karakter)" autocomplete="new-password" minlength="8" required>
-        <input id="r-pass2" type="password" placeholder="Ulangi password" autocomplete="new-password" minlength="8" required>
-        <p id="r-msg" class="form-message" role="status"></p>
-        <button class="btn" type="submit">Kirim Pendaftaran</button>
-      </form>
-      <p class="login-hint" id="login-hint">Login menggunakan email dan password yang terdaftar.</p>
+      <div id="auth-login-area">
+        <form id="login-form" class="auth-form" autocomplete="on">
+          <label class="field"><span>Email</span><input id="l-user" type="email" placeholder="nama@email.com" autocomplete="username" required></label>
+          <label class="field"><span>Password</span><input id="l-pass" type="password" placeholder="Masukkan password" autocomplete="current-password" required></label>
+          <div class="login-inline"><button type="button" class="text-link" id="show-forgot">Lupa password?</button></div>
+          <p id="l-err" class="form-error" role="alert"></p>
+          <button class="btn login-submit" type="submit">Masuk</button>
+        </form>
+        <p class="login-hint" id="login-hint">Gunakan email dan password akun yang terdaftar.</p>
+        <div id="register-access" class="register-access">
+          <div class="login-separator"><span>Belum punya akun pegawai?</span></div>
+          <button type="button" class="btn ghost register-toggle" id="show-register">Daftar Pegawai</button>
+        </div>
+      </div>
+      <div id="forgot-area" class="hidden">
+        <h2 class="forgot-title">Lupa Password</h2>
+        <p class="muted">Kami akan mengirim tautan pemulihan ke email akun Anda.</p>
+        <form id="forgot-form" class="auth-form">
+          <label class="field"><span>Email terdaftar</span><input id="forgot-email" type="email" placeholder="nama@email.com" required></label>
+          <p id="forgot-message" class="form-message" role="status"></p>
+          <button class="btn login-submit" type="submit">Kirim Tautan</button>
+          <button class="btn ghost register-toggle" id="back-login" type="button">Kembali ke Login</button>
+        </form>
+      </div>
     </div>
   </section>
 
