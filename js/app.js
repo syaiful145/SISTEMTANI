@@ -891,8 +891,11 @@ function pagePekerjaan(jenis) {
       rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.panenKg==null?'-':rp(l.panenKg)+' kg',esc(l.kualitasPanen||'-'),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')]),'Belum ada hasil panen yang dilaporkan.')
     : tabel(['Tanggal','Pegawai','Lahan','Tanaman','Luas ditanam','Jumlah bibit','Status','Detail'],
       rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')]),'Belum ada kegiatan penanaman yang dilaporkan.');
+  const adminData = admin
+    ? '<section class="card" style="margin-top:22px"><h3>Data '+esc(jenis)+' yang dikelola Admin</h3><p class="muted">Data master ini dapat ditambah dan diubah Admin. Penghapusan hanya tersedia untuk Admin Utama. Laporan kerja pegawai tetap tercatat pada tabel di atas.</p>'+crud(jenis==='Panen'?'panen':'penanaman',jenis==='Panen'?cfgPanen():cfgPenanaman())+'</section>'
+    : '';
   return {html:head(jenis==='Panen'?'Pencatatan Panen':'Pencatatan Penanaman',btn)+
-    '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+draftHtml+body};
+    '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+draftHtml+body+adminData};
 }
 
 function pageAktivitas() {
