@@ -1179,12 +1179,9 @@ function tampilkanFormPasswordPemulihan() {
 
 function setAuthMode(mode) {
   const isRegister = mode === 'register';
-  $('#login-form').classList.toggle('hidden', isRegister);
-  $('#register-form').classList.toggle('hidden', !isRegister);
-  $('#login-hint').classList.toggle('hidden', isRegister);
   $('#auth-login-area').classList.toggle('hidden', isRegister);
-  $('#register-access').classList.toggle('hidden', isRegister || AUTH_LOGIN_ROLE !== 'pegawai');
-  $('#l-err').textContent = '';
+  $('#register-area').classList.toggle('hidden', !isRegister);
+  $('#forgot-area').classList.add('hidden');
   $('#r-msg').textContent = '';
   $('#r-msg').classList.remove('error');
 }
@@ -1258,6 +1255,7 @@ async function init() {
   $('#login-admin').onclick = () => pilihJenisLogin('admin');
   $('#login-pegawai').onclick = () => pilihJenisLogin('pegawai');
   $('#show-register').onclick = () => setAuthMode('register');
+  $('#back-to-login').onclick = () => setAuthMode('login');
   $('#forgot-form').onsubmit = kirimLinkResetPassword;
   $('#show-forgot').onclick = () => {
     $('#auth-login-area').classList.add('hidden');
