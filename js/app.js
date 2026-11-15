@@ -865,7 +865,7 @@ function pageGudang() {
         pj ? esc(penanamanLabel(pj)) : (t.laporanId ? 'Laporan #' + esc(t.laporanId) : '-'),
         t.pegawaiId ? esc(namaPegawai(t.pegawaiId)) : '-',
         esc(t.keterangan),
-        '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+brg.id+'">Detail barang</button>'
+        '<div class="row-actions"><button class="btn tiny ghost" data-act="detailBarang" data-id="'+brg.id+'">Detail barang</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusRiwayat" data-tbl="transaksi" data-id="'+t.id+'">Hapus</button>':'')+'</div>'
       ];
     }), 'Belum ada transaksi.')}
   </div>`;
