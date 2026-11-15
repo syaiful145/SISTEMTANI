@@ -814,11 +814,14 @@ function pageAbsensi(){
       '<h3>Riwayat Absensi</h3>'+tabel(['Tanggal','Masuk','Pulang','Lokasi'],rows.map(x=>[tgl(x.tanggal),x.masukAt?waktuLokal(new Date(x.masukAt)):'-',x.pulangAt?waktuLokal(new Date(x.pulangAt)):'-',esc(x.masukAlamat||'-')]),'Belum ada riwayat.')};
   }
   const peg=DB.all('pegawai').filter(p=>p.statusVerifikasi==='disetujui'),todayRows=DB.all('absensi').filter(x=>x.tanggal===today);
-  const status=peg.map(p=>{const a=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const iz=izin.find(x=>String(x.pegawaiId)===String(p.id)&&x.status==='disetujui'&&x.tanggalMulai<=today&&x.tanggalSelesai>=today);const st=a?'Hadir':iz?'Izin':'Belum absen';return [esc(p.nama),'<span class="tag '+(st==='Hadir'?'green':st==='Izin'?'amber':'red')+'">'+st+'</span>',a?.masukAt?waktuLokal(new Date(a.masukAt)):'-',a?.pulangAt?waktuLokal(new Date(a.pulangAt)):'-'];});
+  const lewatJamPulang=new Date().toTimeString().slice(0,5)>=(cfg.jamPulang||'17:00');
+  const batasMasuk=(cfg.jamMasuk||'08:00').split(':').map(Number);
+  const deadlineMasuk=new Date();deadlineMasuk.setHours(batasMasuk[0],batasMasuk[1]+(Number(cfg.toleransiTerlambat)||0),0,0);
+  const status=peg.map(p=>{const a=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const iz=izin.find(x=>String(x.pegawaiId)===String(p.id)&&x.status==='disetujui'&&x.tanggalMulai<=today&&x.tanggalSelesai>=today);let st=a?(a.masukAt&&new Date(a.masukAt)>deadlineMasuk?'Terlambat':'Hadir'):iz?'Izin':lewatJamPulang?'Tidak hadir':'Belum absen';return [esc(p.nama),'<span class="tag '+(st==='Hadir'?'green':st==='Izin'?'amber':st==='Terlambat'?'amber':st==='Tidak hadir'?'red':'')+'">'+st+'</span>',a?.masukAt?waktuLokal(new Date(a.masukAt)):'-',a?.pulangAt?waktuLokal(new Date(a.pulangAt)):'-'];});
   const pending=izin.filter(x=>x.status==='menunggu');
   return {html:head('Rekap Absensi Pegawai')+
     '<section class="card"><h3>Atur Jam Kerja</h3><form id="att-schedule" class="form-grid"><label class="field"><span>Jam masuk</span><input name="jamMasuk" type="time" value="'+esc(cfg.jamMasuk)+'" required></label><label class="field"><span>Jam pulang</span><input name="jamPulang" type="time" value="'+esc(cfg.jamPulang)+'" required></label><label class="field"><span>Toleransi terlambat (menit)</span><input name="toleransiTerlambat" type="number" min="0" max="180" value="'+(Number(cfg.toleransiTerlambat)||0)+'" required></label><button class="btn" type="submit">Simpan Jadwal</button><p id="att-schedule-msg" class="form-error full"></p></form></section>'+
-    '<h3>Status Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang'],status,'Belum ada pegawai.')+
+    '<h3>Status Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Foto Masuk','Foto Pulang'],status.map((r,i)=>{const a=todayRows.find(x=>String(x.pegawaiId)===String(peg[i].id));return r.concat([a?.masukFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="masuk" data-id="'+a.id+'">Lihat</button>':'-',a?.pulangFotoPath?'<button class="btn tiny ghost" data-act="lihatFotoAbsensi" data-kind="pulang" data-id="'+a.id+'">Lihat</button>':'-']);}),'Belum ada pegawai.')+
     '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Periode','Jenis','Alasan','Bukti','Keputusan'],pending.map(x=>[esc(namaPegawai(x.pegawaiId)),tgl(x.tanggalMulai)+' – '+tgl(x.tanggalSelesai),esc(x.jenis),esc(x.alasan),'<button class="btn tiny ghost" data-act="lihatBuktiIzin" data-id="'+x.id+'">Lihat</button>','<button class="btn tiny" data-act="prosesIzin" data-status="disetujui" data-id="'+x.id+'">Setujui</button> <button class="btn tiny danger" data-act="prosesIzin" data-status="ditolak" data-id="'+x.id+'">Tolak</button>']),'Tidak ada izin menunggu.'),
     after:()=>{const form=$('#att-schedule');if(form)form.onsubmit=async ev=>{ev.preventDefault();const d={jamMasuk:form.elements.jamMasuk.value,jamPulang:form.elements.jamPulang.value,toleransiTerlambat:Number(form.elements.toleransiTerlambat.value)};const msg=$('#att-schedule-msg');try{if(d.jamPulang<=d.jamMasuk)throw new Error('Jam pulang harus setelah jam masuk.');const old=DB.all('pengaturanAbsensi')[0];if(old)await DB.update('pengaturanAbsensi',old.id,d);else await DB.add('pengaturanAbsensi',d);await DB.init(true);render();}catch(x){msg.textContent=x.message;}};}};
 }
@@ -848,6 +851,12 @@ async function prosesIzinPegawai(id,status){
   if(!isAdmin())return;const catatan=status==='ditolak'?prompt('Alasan penolakan (wajib):'):'';
   if(status==='ditolak'&&!catatan?.trim())return;
   try{await DB.update('izin',id,{status,catatanAdmin:catatan||null,diprosesOleh:me().authId,diprosesAt:new Date().toISOString()});await DB.init(true);render();}catch(x){alert('Gagal memproses izin: '+x.message);}
+}
+async function lihatFotoAbsensi(id,jenis){
+  const a=DB.get('absensi',id),path=jenis==='pulang'?a?.pulangFotoPath:a?.masukFotoPath;
+  if(!path)return;const {data,error}=await supabaseClient.storage.from('absensi-bukti').createSignedUrl(path,300);
+  if(error)return alert('Foto absensi gagal dibuka: '+error.message);
+  openInfo('Foto Absen '+(jenis==='pulang'?'Pulang':'Masuk'),'<img src="'+esc(data.signedUrl)+'" alt="Foto absensi" style="width:100%;max-height:420px;object-fit:contain;border-radius:12px">');
 }
 async function lihatBuktiIzin(id){
   const x=DB.get('izin',id);if(!x?.fotoPath)return;const {data,error}=await supabaseClient.storage.from('izin-bukti').createSignedUrl(x.fotoPath,300);
@@ -1468,6 +1477,7 @@ function aksiKlik(e) {
     case 'ajukanIzin': return ajukanIzinPegawai();
     case 'prosesIzin': return prosesIzinPegawai(id,b.dataset.status);
     case 'lihatBuktiIzin': return lihatBuktiIzin(id);
+    case 'lihatFotoAbsensi': return lihatFotoAbsensi(id,b.dataset.kind);
     case 'detailLaporan': return detailLaporan(id);
     case 'statusLaporan': {
       const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
