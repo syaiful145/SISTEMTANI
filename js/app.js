@@ -796,7 +796,7 @@ async function resetPasswordPegawai(id) {
     if (!data?.success) throw new Error(data?.error || 'Function tidak mengonfirmasi reset password.');
 
     const nomor = nomorWhatsApp(pegawai.telepon);
-    const pesanWA = `Halo ${pegawai.nama}, password sementara akun AgriCore Anda: ${temporaryPassword}. Silakan login menggunakan email terdaftar, lalu segera buat password baru setelah berhasil masuk.`;
+    const pesanWA = `Halo ${pegawai.nama}, password sementara akun SIMTANI Anda: ${temporaryPassword}. Silakan login menggunakan email terdaftar, lalu segera buat password baru setelah berhasil masuk.`;
     const tautanWA = nomor
       ? `https://api.whatsapp.com/send?phone=${nomor}&text=${encodeURIComponent(pesanWA)}`
       : '';
