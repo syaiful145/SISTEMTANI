@@ -50,17 +50,29 @@ const DB = {
   },
   async remove(tabel, id) {
     if (!TABLES[tabel]) throw new Error('Jenis data tidak dikenal.');
-    if (tabel === 'pegawai' && (typeof me !== 'function' || me()?.adminLevel !== 'utama')) {
+    const user = typeof me === 'function' ? me() : null;
+    if (tabel === 'pegawai' && user?.adminLevel !== 'utama') {
       throw new Error('Hanya Admin Utama yang boleh menghapus data karyawan.');
     }
-    const { data, error } = await supabaseClient
-      .from(TABLES[tabel])
-      .delete()
-      .eq('id', id)
-      .select('id');
-    if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
-    if (!data || data.length === 0) {
-      throw new Error(`Data ${tabel} tidak terhapus. Kemungkinan dibatasi kebijakan RLS Supabase atau data sudah tidak ada.`);
+
+    // Admin Utama memakai Edge Function + RPC service-role agar relasi FK,
+    // riwayat pegawai, dan penyesuaian stok diproses di server.
+    if (user?.tipe === 'admin' && user?.adminLevel === 'utama') {
+      const { data, error } = await supabaseClient.functions.invoke('admin-force-delete', {
+        body: { table: TABLES[tabel], id: Number(id) }
+      });
+      if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
+      if (!data?.success) throw new Error(data?.error || `Gagal menghapus ${tabel}.`);
+    } else {
+      const { data, error } = await supabaseClient
+        .from(TABLES[tabel])
+        .delete()
+        .eq('id', id)
+        .select('id');
+      if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
+      if (!data || data.length === 0) {
+        throw new Error(`Data ${tabel} tidak terhapus. Kemungkinan dibatasi kebijakan RLS Supabase atau data sudah tidak ada.`);
+      }
     }
     this.d[tabel] = this.d[tabel].filter(x => String(x.id) !== String(id));
   },
