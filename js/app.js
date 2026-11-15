@@ -549,21 +549,40 @@ function pageAktivitas() {
     const rows = DB.all('laporan').filter(l => l.pegawaiId === u.id).sort((a, b) => b.id - a.id);
     return {
       html: head('Laporan Harian', '<button class="btn" data-act="lapor">+ Kirim Laporan</button>') +
-        tabel(['Tanggal', 'Jenis', 'Lokasi', 'Deskripsi'],
-          rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc(l.lokasi), esc(l.deskripsi)]),
+        tabel(['Tanggal', 'Jenis', 'Lokasi', 'Status'],
+          rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc(l.lokasi),
+            l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>']),
           'Belum ada laporan yang dikirim. Gunakan tombol di atas untuk melapor kegiatan di lapangan.')
     };
   }
   const rows = DB.all('laporan').slice().sort((a, b) => b.id - a.id);
   return {
     html: head('Laporan Harian Pegawai') +
-      tabel(['Tanggal', 'Pegawai', 'Jenis', 'Lokasi', 'Deskripsi', 'Status'],
+      tabel(['Tanggal', 'Pegawai', 'Jenis', 'Lokasi', 'Status', 'Aksi'],
         rows.map(l => [
-          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc(l.lokasi), esc(l.deskripsi),
-          l.dibaca ? '<span class="muted">Dibaca</span>' : '<span class="tag green">Baru</span>'
-        ]), 'Belum ada laporan dari pegawai.'),
-    after: () => { DB.all('laporan').forEach(l => { DB.update('laporan', l.id, { dibaca: true }).catch(e => console.error(e)); }); }
+          tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc(l.lokasi),
+          l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
+          '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="' + esc(l.id) + '">Detail</button>' +
+          (l.status === 'diterima'
+            ? '<button class="btn tiny ghost" data-act="statusLaporan" data-status="belum_diterima" data-id="' + esc(l.id) + '">Batalkan penerimaan</button>'
+            : '<button class="btn tiny" data-act="statusLaporan" data-status="diterima" data-id="' + esc(l.id) + '">Terima</button>') + '</div>'
+        ]), 'Belum ada laporan dari pegawai.')
   };
+}
+function detailLaporan(id) {
+  const l = DB.get('laporan', id);
+  if (!l) return alert('Laporan tidak ditemukan.');
+  openInfo('Detail Laporan Pegawai', `
+    <div class="detail-grid">
+      <p><strong>Pegawai</strong><br>${esc(namaPegawai(l.pegawaiId))}</p>
+      <p><strong>Tanggal</strong><br>${esc(tgl(l.tanggal))}</p>
+      <p><strong>Jenis kegiatan</strong><br>${esc(l.jenis)}</p>
+      <p><strong>Lokasi</strong><br>${esc(l.lokasi)}</p>
+      <p><strong>Status</strong><br>${l.status === 'diterima' ? 'Diterima' : 'Belum diterima'}</p>
+      <p><strong>Deskripsi</strong><br>${esc(l.deskripsi)}</p>
+    </div>
+    <div class="form-actions"><button class="btn" data-tutup>Tutup</button></div>`);
+  $('#modal [data-tutup]').onclick = tutupModal;
 }
 
 function pageNotifikasi() {
@@ -1174,6 +1193,12 @@ function aksiKlik(e) {
     case 'tolakPegawai': return prosesVerifikasiPegawai(id, 'ditolak');
     case 'transaksi': return openTransaksi();
     case 'lapor': return openLapor();
+    case 'detailLaporan': return detailLaporan(id);
+    case 'statusLaporan': {
+      const status = b.dataset.status === 'diterima' ? 'diterima' : 'belum_diterima';
+      DB.update('laporan', id, { status }).then(() => { catat('Ubah status laporan', status === 'diterima' ? 'Diterima' : 'Belum diterima'); render(); }).catch(err => alert(err.message));
+      return;
+    }
     case 'kal': geserKal(Number(b.dataset.d)); return render();
     case 'csv': return unduhCSV(LAP_DATA);
     case 'cetak': return window.print();
