@@ -46,11 +46,11 @@ function me() { return ACTIVE_USER; }
 async function muatPenggunaAuth(user) {
   if (!user) { ACTIVE_USER = null; return null; }
   const { data: profil, error: profilError } = await supabaseClient
-    .from('profiles').select('id,nama,role,pegawai_id').eq('id', user.id).maybeSingle();
+    .from('profiles').select('id,nama,role,pegawai_id,admin_level,avatar_url').eq('id', user.id).maybeSingle();
   if (profilError) throw profilError;
   if (!profil) throw new Error('Profil akun tidak ditemukan. Hubungi administrator.');
   if (profil.role === 'admin') {
-    ACTIVE_USER = { tipe: 'admin', key: 'admin', nama: profil.nama || 'Administrator', akses: Object.keys(AKSES), authId: user.id };
+    ACTIVE_USER = { tipe: 'admin', key: 'admin', nama: profil.nama || 'Administrator', akses: Object.keys(AKSES), authId: user.id, adminLevel: profil.admin_level, avatarUrl: profil.avatar_url || '' };
     return ACTIVE_USER;
   }
   const { data: pegawai, error: pegawaiError } = await supabaseClient
@@ -61,7 +61,7 @@ async function muatPenggunaAuth(user) {
     const alasan = pegawai.status_verifikasi === 'ditolak' && pegawai.alasan_penolakan ? ` Alasan: ${pegawai.alasan_penolakan}` : '';
     throw new Error(`Akun pegawai masih ${pegawai.status_verifikasi || 'menunggu'} verifikasi admin.${alasan}`);
   }
-  ACTIVE_USER = { tipe: 'pegawai', key: 'p' + pegawai.id, nama: pegawai.nama, id: pegawai.id, akses: pegawai.akses || [], authId: user.id };
+  ACTIVE_USER = { tipe: 'pegawai', key: 'p' + pegawai.id, nama: pegawai.nama, id: pegawai.id, akses: pegawai.akses || [], authId: user.id, avatarUrl: profil.avatar_url || '' };
   return ACTIVE_USER;
 }
 const isAdmin = () => me()?.tipe === 'admin';
@@ -79,7 +79,9 @@ const MENU = [
   { id: 'aktivitas', label: 'Laporan Harian', icon: '📝' },
   { id: 'laporan', label: 'Laporan', icon: '📊', adminOnly: true },
   { id: 'kalender', label: 'Kalender', icon: '📅' },
-  { id: 'notifikasi', label: 'Notifikasi', icon: '🔔', adminOnly: true }
+  { id: 'notifikasi', label: 'Notifikasi', icon: '🔔', adminOnly: true },
+  { id: 'profil', label: 'Profil Saya', icon: '👤' },
+  { id: 'admins', label: 'Manajemen Admin', icon: '🛡️', adminOnly: true }
 ];
 
 function menuVisible(m) {
@@ -848,7 +850,9 @@ const PAGES = {
   aktivitas: pageAktivitas,
   laporan: pageLaporan,
   kalender: pageKalender,
-  notifikasi: pageNotifikasi
+  notifikasi: pageNotifikasi,
+  profil: pageProfil,
+  admins: pageAdmins
 };
 
 function showLogin() {
