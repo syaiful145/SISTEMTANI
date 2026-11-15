@@ -34,21 +34,35 @@
     const attended=todayRows.filter(x=>statusA(x,sched)==='Hadir').length, late=todayRows.filter(x=>statusA(x,sched)==='Terlambat').length;
     const absent=staff.filter(p=>!todayRows.some(x=>String(x.pegawaiId)===String(p.id))&&!approvedA(p.id,today)).length;
     return {html:head('Rekap Absensi Pegawai','<button class="btn" data-act="att-schedule">⚙ Atur Jam Kerja</button>')+
-      '<section class="card"><h3>Jadwal Kerja</h3><p>Masuk <b>'+escA(String(sched.jamMasuk).slice(0,5))+'</b> · Pulang <b>'+escA(String(sched.jamPulang).slice(0,5))+'</b> · Toleransi '+Number(sched.toleransiTerlambat||0)+' menit</p></section>'+
+      '<section class="card"><h3>Jadwal Kerja</h3><p>Masuk <b>'+escA(String(sched.jamMasuk).slice(0,5))+'</b> · Pulang <b>'+escA(String(sched.jamPulang).slice(0,5))+'</b> · Toleransi '+Number(sched.toleransiTerlambat||0)+' menit</p>'+(isAdmin()?'<form id="att-schedule-form" class="form-grid"><label class="field"><span>Jam masuk</span><input type="time" name="jamMasuk" value="'+escA(String(sched.jamMasuk).slice(0,5))+'" required></label><label class="field"><span>Jam pulang</span><input type="time" name="jamPulang" value="'+escA(String(sched.jamPulang).slice(0,5))+'" required></label><label class="field"><span>Toleransi terlambat (menit)</span><input type="number" name="toleransiTerlambat" min="0" max="180" value="'+Number(sched.toleransiTerlambat||0)+'" required></label><div class="form-actions"><button class="btn" type="submit">Simpan Jadwal</button></div><p id="att-schedule-msg" class="form-error full"></p></form>':'')+'</section>'+
       '<section class="stats-grid"><div class="stat-card"><span>Hadir</span><strong>'+attended+'</strong></div><div class="stat-card"><span>Terlambat</span><strong>'+late+'</strong></div><div class="stat-card"><span>Izin</span><strong>'+approved.length+'</strong></div><div class="stat-card"><span>Tidak hadir</span><strong>'+absent+'</strong></div></section>'+
       '<h3>Rekap Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],staff.map(p=>{const r=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const st=r?statusA(r,sched):approvedA(p.id,today)?'Izin':'Tidak hadir';return [escA(p.nama),tagA(st),timeA(r&&r.masukAt),timeA(r&&r.pulangAt),escA(r&&r.masukAlamat||'-'),escA(r&&r.pulangAlamat||'-')];}),'Belum ada pegawai.')+
       '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Tanggal','Jenis','Alasan','Aksi'],pending.map(x=>[escA(namaPegawai(x.pegawaiId)),dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),'<button class="btn tiny" data-act="att-review" data-id="'+x.id+'">Periksa</button>']),'Tidak ada pengajuan menunggu.')+
       (DB.all('absensi').length?'<h3>Arsip Riwayat Absensi</h3>'+historyTreeA(DB.all('absensi'),true):'')};
   }
-  async function scheduleEditA(){
+  async function saveScheduleA(form){
     if(!isAdmin())return;
-    const old=scheduleA(), masuk=prompt('Jam masuk (HH:MM)',String(old.jamMasuk).slice(0,5));if(masuk===null)return;
-    const pulang=prompt('Jam pulang (HH:MM)',String(old.jamPulang).slice(0,5));if(pulang===null)return;
-    const tol=prompt('Toleransi terlambat (menit)',String(old.toleransiTerlambat||0));if(tol===null)return;
-    if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(masuk)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(pulang)||!/^\d{1,3}$/.test(tol)||Number(tol)>180)return alert('Format jam atau toleransi tidak valid.');
-    const {data,error}=await supabaseClient.from('pengaturan_absensi').upsert({id:1,jam_masuk:masuk,jam_pulang:pulang,toleransi_terlambat:Number(tol),updated_at:new Date().toISOString()}).select('*').single();
-    if(error)return alert('Gagal menyimpan jadwal: '+error.message);
-    DB.d.pengaturanAbsensi=[DB.fromDb(data)];render();
+    const data=new FormData(form), masuk=String(data.get('jamMasuk')||''), pulang=String(data.get('jamPulang')||''), tol=Number(data.get('toleransiTerlambat'));
+    const msg=form.querySelector('#att-schedule-msg');
+    if(!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(masuk)||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(pulang)||!Number.isInteger(tol)||tol<0||tol>180){if(msg)msg.textContent='Periksa kembali jam dan toleransi.';return;}
+    const btn=form.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Menyimpan...';
+    const {data:row,error}=await supabaseClient.from('pengaturan_absensi').upsert({id:1,jam_masuk:masuk,jam_pulang:pulang,toleransi_terlambat:tol,updated_at:new Date().toISOString()}).select('*').single();
+    if(error){if(msg)msg.textContent='Gagal menyimpan: '+error.message;btn.disabled=false;btn.textContent='Simpan Jadwal';return;}
+    DB.d.pengaturanAbsensi=[DB.fromDb(row)];render();
+  }
+  function pageGudangAttendanceA(){
+    if(isAdmin())return pageGudang();
+    const seeds=DB.all('barang').filter(x=>String(x.kategori||'').toLowerCase()==='bibit');
+    return {html:head('Stok Benih Pegawai')+(seeds.length?'<p class="muted">Pilih benih yang digunakan. Stok langsung berkurang setelah disimpan.</p>'+seeds.map(x=>'<section class="card"><h3>'+escA(x.nama)+'</h3><p><b>Sisa stok: '+Number(x.stok||0).toLocaleString('id-ID')+' '+escA(x.satuan||'')+'</b></p><form class="att-seed-use form-grid" data-barang-id="'+escA(x.id)+'"><label class="field"><span>Jumlah digunakan</span><input type="number" name="jumlah" min="1" max="'+Math.max(0,Number(x.stok)||0)+'" step="1" required '+(Number(x.stok)<=0?'disabled':'')+'></label><label class="field full"><span>Keterangan (opsional)</span><input name="keterangan" maxlength="250" placeholder="Contoh: penyemaian lahan A"></label><div class="form-actions"><button class="btn" type="submit" '+(Number(x.stok)<=0?'disabled':'')+'>Catat Penggunaan</button></div><p class="form-error full"></p></form></section>').join(''):'<section class="card"><p>Belum ada stok benih yang tersedia.</p></section>')};
+  }
+  async function useSeedA(form){
+    const id=form.dataset.barangId, jumlah=Number(form.elements.jumlah.value), keterangan=form.elements.keterangan.value.trim(), msg=form.querySelector('.form-error'), btn=form.querySelector('button[type="submit"]');
+    const item=DB.all('barang').find(x=>String(x.id)===String(id));
+    if(!item||!Number.isInteger(jumlah)||jumlah<=0||jumlah>Number(item.stok)){msg.textContent='Jumlah tidak valid atau stok tidak mencukupi.';return;}
+    btn.disabled=true;btn.textContent='Menyimpan...';
+    const {data,error}=await supabaseClient.rpc('pegawai_gunakan_benih',{p_barang_id:Number(id),p_jumlah:jumlah,p_keterangan:keterangan||null});
+    if(error){msg.textContent='Gagal mencatat penggunaan: '+error.message;btn.disabled=false;btn.textContent='Catat Penggunaan';return;}
+    await DB.init(false);render();
   }
   let streamA=null;
   function stopA(){if(streamA)streamA.getTracks().forEach(t=>t.stop());streamA=null;}
@@ -117,11 +131,12 @@
   }
   async function decideA(x,status){const note=prompt('Catatan admin (opsional)','')||'';try{await DB.update('izin',x.id,{status,catatanAdmin:note,diprosesOleh:me().authId,diprosesAt:new Date().toISOString()});tutupModal();await refreshA();}catch(e){alert('Gagal memproses izin: '+e.message);}}
   PAGES.absensi=pageA;
-  document.addEventListener('click',e=>{
+  PAGES.gudang=pageGudangAttendanceA;
+  document.addEventListener('submit',e=>{\n    if(e.target.matches('#att-schedule-form')){e.preventDefault();saveScheduleA(e.target);}\n    if(e.target.matches('.att-seed-use')){e.preventDefault();useSeedA(e.target);}\n  });\n  document.addEventListener('click',e=>{
     const b=e.target.closest('[data-act]');if(!b)return;
     const id=b.dataset.id;
     switch(b.dataset.act){
-      case 'att-schedule':e.preventDefault();scheduleEditA();break;
+      case 'att-schedule':e.preventDefault();document.querySelector('#att-schedule-form')?.scrollIntoView({behavior:'smooth',block:'center'});break;
       case 'att-photo-in':e.preventDefault();photoA('masuk');break;
       case 'att-photo-out':e.preventDefault();photoA('pulang');break;
       case 'att-leave':e.preventDefault();leaveA();break;
