@@ -39,6 +39,7 @@ const tabel = (kolom, baris, kosong = 'Belum ada data.') => {
 
 /* ===== Sesi & hak akses ===== */
 let ACTIVE_USER = null;
+let PASSWORD_CHANGE_REQUIRED = false;
 
 function me() { return ACTIVE_USER; }
 
@@ -852,12 +853,62 @@ function showLogin() {
   $('#login-page').classList.remove('hidden');
 }
 
+function tampilkanWajibGantiPassword() {
+  $('#app').classList.add('hidden');
+  const page = $('#login-page');
+  page.classList.remove('hidden');
+  page.innerHTML = `<div class="login-card">
+    <h1>Ganti Password</h1>
+    <p class="muted">Password yang diberikan Admin hanya sementara. Buat password baru untuk melanjutkan ke AgriCore.</p>
+    <form id="form-password-baru" autocomplete="off">
+      <label class="field"><span>Password baru (minimal 8 karakter)</span><input id="password-baru" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label class="field"><span>Ulangi password baru</span><input id="password-baru-ulang" type="password" minlength="8" autocomplete="new-password" required></label>
+      <p id="password-baru-error" class="form-error" role="alert"></p>
+      <button class="btn" type="submit">Simpan Password Baru</button>
+    </form>
+    <button class="btn ghost small" id="keluar-ganti-password" type="button">Keluar</button>
+  </div>`;
+  $('#keluar-ganti-password').onclick = async () => {
+    await supabaseClient.auth.signOut();
+    ACTIVE_USER = null;
+    PASSWORD_CHANGE_REQUIRED = false;
+    window.location.reload();
+  };
+  $('#form-password-baru').onsubmit = async e => {
+    e.preventDefault();
+    const password = $('#password-baru').value;
+    const ulang = $('#password-baru-ulang').value;
+    const errorBox = $('#password-baru-error');
+    const submit = $('#form-password-baru button[type="submit"]');
+    errorBox.textContent = '';
+    if (password.length < 8) { errorBox.textContent = 'Password minimal 8 karakter.'; return; }
+    if (password !== ulang) { errorBox.textContent = 'Ulangi password belum sama.'; return; }
+    submit.disabled = true;
+    submit.textContent = 'Menyimpan...';
+    try {
+      const { error } = await supabaseClient.auth.updateUser({
+        password,
+        data: { must_change_password: false }
+      });
+      if (error) throw error;
+      PASSWORD_CHANGE_REQUIRED = false;
+      alert('Password baru berhasil disimpan. Silakan masuk ke AgriCore.');
+      window.location.reload();
+    } catch (err) {
+      errorBox.textContent = err.message || 'Gagal menyimpan password baru.';
+      submit.disabled = false;
+      submit.textContent = 'Simpan Password Baru';
+    }
+  };
+}
+
 function closeSidebar() {
   $('#sidebar').classList.remove('open');
   $('#overlay').classList.remove('show');
 }
 
 function render() {
+  if (PASSWORD_CHANGE_REQUIRED) return tampilkanWajibGantiPassword();
   const u = me();
   if (!u) return showLogin();
   $('#login-page').classList.add('hidden');
@@ -931,6 +982,11 @@ async function login(e) {
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
     try {
+      if (data.user.user_metadata?.must_change_password === true) {
+        PASSWORD_CHANGE_REQUIRED = true;
+        render();
+        return;
+      }
       await muatPenggunaAuth(data.user);
       await DB.init(isAdmin());
     } catch (e) {
@@ -1015,6 +1071,7 @@ async function init() {
   $('#logout').onclick = async () => {
     try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); }
     ACTIVE_USER = null;
+    PASSWORD_CHANGE_REQUIRED = false;
     location.hash = '';
     render();
   };
@@ -1034,7 +1091,10 @@ async function init() {
   try {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
-      try { await muatPenggunaAuth(session.user); await DB.init(isAdmin()); }
+      try {
+        if (session.user.user_metadata?.must_change_password === true) PASSWORD_CHANGE_REQUIRED = true;
+        else { await muatPenggunaAuth(session.user); await DB.init(isAdmin()); }
+      }
       catch (e) { await supabaseClient.auth.signOut(); ACTIVE_USER = null; $('#l-err').textContent = e.message; }
     }
   } catch (e) { console.error('Gagal memulihkan sesi Supabase:', e); }
