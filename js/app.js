@@ -77,7 +77,7 @@ const MENU = [
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
   { id: 'gudang', label: 'Gudang', icon: '📦', akses: 'gudang' },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
-  { id: 'aktivitas', label: 'Laporan Harian', icon: '📝' },
+  { id: 'aktivitas', label: 'Pekerjaan Lapangan', icon: '📝' },
   { id: 'absensi', label: 'Absensi', icon: '🕒' },
   { id: 'laporan', label: 'Laporan', icon: '📊', adminOnly: true },
   { id: 'kalender', label: 'Kalender', icon: '📅' },
@@ -832,17 +832,17 @@ function pageAktivitas() {
   if (u.tipe === 'pegawai') {
     const rows = DB.all('laporan').filter(l => l.pegawaiId === u.id).sort((a, b) => b.id - a.id);
     return {
-      html: head('Laporan Harian', '<button class="btn" data-act="lapor">+ Kirim Laporan</button>') +
+      html: head('Pekerjaan Lapangan', '<button class="btn" data-act="lapor">+ Catat Pekerjaan</button>') +
         tabel(['Tanggal', 'Kegiatan', 'Lahan', 'Tanaman', 'Luas', 'Status', 'Detail'],
           rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
             l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
             '<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),
-          'Belum ada laporan yang dikirim. Gunakan tombol di atas untuk melapor kegiatan di lapangan.')
+          'Belum ada pekerjaan tercatat. Gunakan tombol di atas untuk mencatat penanaman, perawatan, atau panen.')
     };
   }
   const rows = DB.all('laporan').slice().sort((a, b) => b.id - a.id);
   return {
-    html: head('Laporan Harian Pegawai') +
+    html: head('Pekerjaan Lapangan Pegawai') +
       tabel(['Tanggal', 'Pegawai', 'Kegiatan', 'Lahan', 'Tanaman', 'Luas', 'Status', 'Aksi'],
         rows.map(l => [
           tgl(l.tanggal), esc(namaPegawai(l.pegawaiId)), esc(l.jenis), esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
