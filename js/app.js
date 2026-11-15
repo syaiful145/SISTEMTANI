@@ -372,7 +372,7 @@ function cfgPenanaman() {
 function cfgPanen() {
   return {
     judul: 'Data Panen',
-    tambah: false, ubah: false, hapus: false,
+    tambah: false, ubah: false, hapus: me()?.adminLevel === 'utama',
     nama: r => `Panen ${rp(r.kg)} kg`,
     kolom: [
       { h: 'Tanggal', f: r => tgl(r.tanggal) },
@@ -907,7 +907,7 @@ function pageAktivitas() {
           '<div class="row-actions"><button class="btn tiny ghost" data-act="detailLaporan" data-id="' + esc(l.id) + '">Detail</button>' +
           (l.status === 'diterima'
             ? '<button class="btn tiny ghost" data-act="statusLaporan" data-status="belum_diterima" data-id="' + esc(l.id) + '">Batalkan penerimaan</button>'
-            : '<button class="btn tiny" data-act="statusLaporan" data-status="diterima" data-id="' + esc(l.id) + '">Terima</button>') + '</div>'
+            : '<button class="btn tiny" data-act="statusLaporan" data-status="diterima" data-id="' + esc(l.id) + '">Terima</button>') + (me()?.adminLevel==='utama' ? '<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>' : '') + '</div>'
         ]), 'Belum ada laporan dari pegawai.')
   };
 }
