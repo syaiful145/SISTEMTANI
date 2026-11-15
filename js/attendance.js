@@ -25,7 +25,7 @@
       const action=!r?'<button class="btn" data-act="att-photo-in">Absen Masuk · Foto</button>':!r.pulangAt?'<button class="btn" data-act="att-photo-out">Absen Pulang · Foto</button>':'<span class="tag green">Absensi selesai</span>';
       return {html:head('Absensi Pegawai',action)+'<section class="card"><h3>Jadwal Kerja</h3><p>Masuk <b>'+escA(String(sched.jamMasuk).slice(0,5))+'</b> · Pulang <b>'+escA(String(sched.jamPulang).slice(0,5))+'</b></p><p>Toleransi terlambat: '+Number(sched.toleransiTerlambat||0)+' menit</p><p>Status hari ini: '+tagA(state)+'</p><button class="btn ghost" data-act="att-leave">+ Ajukan Izin / Sakit</button></section>'+
       (r?'<section class="card"><h3>Absensi Hari Ini</h3><p>Masuk: '+timeA(r.masukAt)+'</p><p>Pulang: '+timeA(r.pulangAt)+'</p><p>Lokasi masuk: '+escA(r.masukAlamat||'-')+'</p><p>Lokasi pulang: '+escA(r.pulangAlamat||'-')+'</p></section>':'<section class="card"><p>Belum ada catatan absensi hari ini.</p></section>')+
-      '<h3>Riwayat Absensi</h3>'+historyTreeA(own)+
+      (own.length?'<h3>Riwayat Absensi</h3>'+historyTreeA(own):'')+
       '<h3>Riwayat Pengajuan Izin</h3>'+tabel(['Tanggal','Jenis','Alasan','Status','Catatan Admin'],mine.map(x=>[dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),tagA(x.status),escA(x.catatanAdmin||'-')]),'Belum ada pengajuan izin.')};
     }
     const staff=DB.all('pegawai').filter(x=>x.statusVerifikasi==='disetujui'), todayRows=DB.all('absensi').filter(x=>x.tanggal===today);
@@ -38,7 +38,7 @@
       '<section class="stats-grid"><div class="stat-card"><span>Hadir</span><strong>'+attended+'</strong></div><div class="stat-card"><span>Terlambat</span><strong>'+late+'</strong></div><div class="stat-card"><span>Izin</span><strong>'+approved.length+'</strong></div><div class="stat-card"><span>Tidak hadir</span><strong>'+absent+'</strong></div></section>'+
       '<h3>Rekap Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],staff.map(p=>{const r=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const st=r?statusA(r,sched):approvedA(p.id,today)?'Izin':'Tidak hadir';return [escA(p.nama),tagA(st),timeA(r&&r.masukAt),timeA(r&&r.pulangAt),escA(r&&r.masukAlamat||'-'),escA(r&&r.pulangAlamat||'-')];}),'Belum ada pegawai.')+
       '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Tanggal','Jenis','Alasan','Aksi'],pending.map(x=>[escA(namaPegawai(x.pegawaiId)),dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),'<button class="btn tiny" data-act="att-review" data-id="'+x.id+'">Periksa</button>']),'Tidak ada pengajuan menunggu.')+
-      '<h3>Arsip Riwayat Absensi</h3>'+historyTreeA(DB.all('absensi'),true)};
+      (DB.all('absensi').length?'<h3>Arsip Riwayat Absensi</h3>'+historyTreeA(DB.all('absensi'),true):'')};
   }
   async function scheduleEditA(){
     if(!isAdmin())return;
@@ -77,14 +77,27 @@
       (years[y]??={})[m]??=[];
       years[y][m].push(x);
     });
-    return Object.entries(years).sort((a,b)=>b[0].localeCompare(a[0])).map(([y,months])=>
-      '<details class="card"><summary><b>Tahun '+escA(y)+'</b></summary>'+
-      Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,days])=>
-        '<details><summary>'+new Date(y+'-'+m+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'})+' ('+days.length+' catatan)</summary>'+
-        '<div class="table-wrap"><table><thead><tr><th>Tanggal</th>'+(admin?'<th>Pegawai</th>':'')+'<th>Masuk</th><th>Pulang</th><th>Detail</th></tr></thead><tbody>'+
-        days.map(x=>'<tr><td>'+new Date(x.tanggal+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</td>'+(admin?'<td>'+escA(namaPegawai(x.pegawaiId))+'</td>':'')+'<td>'+(x.masukAt?timeA(x.masukAt):'-')+'</td><td>'+(x.pulangAt?timeA(x.pulangAt):'-')+'</td><td><button class="btn tiny ghost" data-act="att-detail" data-id="'+escA(x.id)+'">Detail</button></td></tr>').join('')+
-        '</tbody></table></div></details>').join('')+'</details>'
-    ).join('')||'<section class="card"><p>Belum ada riwayat absensi.</p></section>';
+    return Object.keys(years).sort((a,b)=>b.localeCompare(a)).map(y=>
+      '<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><b>Tahun '+escA(y)+'</b><button class="btn tiny ghost" data-act="att-history-year" data-year="'+y+'">Detail</button></section>'
+    ).join('');
+  }
+  function historyYearA(year, admin=false){
+    const rows=DB.all('absensi').filter(x=>String(x.tanggal).startsWith(year+'-')&&(admin||String(x.pegawaiId)===String(me().id)));
+    const months=[...new Set(rows.map(x=>String(x.tanggal).slice(5,7)))].sort((a,b)=>b.localeCompare(a));
+    openInfo('Riwayat Tahun '+escA(year),months.map(m=>{
+      const label=new Date(year+'-'+m+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'});
+      const count=rows.filter(x=>String(x.tanggal).slice(5,7)===m).length;
+      return '<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><b>'+label+' · '+count+' absensi</b><button class="btn tiny ghost" data-act="att-history-month" data-year="'+year+'" data-month="'+m+'">Detail</button></section>';
+    }).join('')+'<button class="btn ghost" data-tutup>Tutup</button>');
+    const close=$('#modal [data-tutup]');if(close)close.onclick=tutupModal;
+  }
+  function historyMonthA(year, month, admin=false){
+    const rows=DB.all('absensi').filter(x=>String(x.tanggal).startsWith(year+'-'+month+'-')&&(admin||String(x.pegawaiId)===String(me().id))).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
+    const label=new Date(year+'-'+month+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+    openInfo('Riwayat '+escA(label),rows.map(x=>
+      '<section class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><b>'+new Date(x.tanggal+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</b>'+(admin?'<p>'+escA(namaPegawai(x.pegawaiId))+'</p>':'')+'<p>'+tagA(statusA(x,scheduleA()))+'</p></div><button class="btn tiny ghost" data-act="att-detail" data-id="'+escA(x.id)+'">Detail</button></div></section>'
+    ).join('')+'<button class="btn ghost" data-tutup>Tutup</button>');
+    const close=$('#modal [data-tutup]');if(close)close.onclick=tutupModal;
   }
   async function detailAttendanceA(id){
     const x=DB.all('absensi').find(r=>String(r.id)===String(id));if(!x)return;
@@ -114,6 +127,8 @@
       case 'att-leave':e.preventDefault();leaveA();break;
       case 'att-review':e.preventDefault();reviewA(id);break;
       case 'att-detail':e.preventDefault();detailAttendanceA(id);break;
+      case 'att-history-year':e.preventDefault();historyYearA(b.dataset.year,isAdmin());break;
+      case 'att-history-month':e.preventDefault();historyMonthA(b.dataset.year,b.dataset.month,isAdmin());break;
     }
   });
 })();
