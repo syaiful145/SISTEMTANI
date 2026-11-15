@@ -1300,6 +1300,7 @@ async function daftarPegawai(e) {
   const email = $('#r-email').value.trim();
   const username = $('#r-username').value.trim().toLowerCase();
   const jabatan = $('#r-jabatan').value.trim();
+  const msg = $('#r-msg');
   // Samakan format nomor agar 08xxx dan +62xxx dianggap nomor yang sama.
   let telepon = $('#r-telepon').value.replace(/[^0-9]/g, '');
   if (telepon.startsWith('0')) telepon = '62' + telepon.slice(1);
@@ -1312,7 +1313,6 @@ async function daftarPegawai(e) {
   const alamat = $('#r-alamat').value.trim();
   const password = $('#r-pass').value;
   const ulangi = $('#r-pass2').value;
-  const msg = $('#r-msg');
   msg.classList.remove('error');
   if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
     msg.textContent = 'Username harus 3–30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.';
