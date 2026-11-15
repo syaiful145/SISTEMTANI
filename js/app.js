@@ -270,7 +270,7 @@ function openCrud(tbl, id) {
 function cfgLahan() {
   return {
     judul: 'Data Lahan',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: false,
+    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
     labelTambah: '+ Tambah Lahan',
     nama: r => r.nama,
     extra: r => '<button class="btn tiny ghost" data-act="detailLahan" data-id="'+r.id+'">Detail</button>',
@@ -319,7 +319,7 @@ function detailLahan(id) {
 function cfgTanaman() {
   return {
     judul: 'Data Tanaman',
-    tambah: false, ubah: false, hapus: false,
+    tambah: false, ubah: false, hapus: me()?.adminLevel === 'utama',
     nama: r => r.nama,
     kolom: [
       { h: 'Nama', f: r => esc(r.nama) },
@@ -398,7 +398,7 @@ function cfgPanen() {
 function cfgBarang() {
   return {
     judul: 'Data Barang',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdmin(),
+    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
     labelTambah: '+ Tambah Barang',
     nama: r => r.nama,
     kolom: [
@@ -872,9 +872,9 @@ function pagePekerjaan(jenis) {
   const btn=admin?'':'<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
   const body=jenis==='Panen'
     ? tabel(['Tanggal','Pegawai','Lahan','Tanaman','Hasil panen','Kualitas','Status','Detail'],
-      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.panenKg==null?'-':rp(l.panenKg)+' kg',esc(l.kualitasPanen||'-'),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),'Belum ada hasil panen yang dilaporkan.')
+      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.panenKg==null?'-':rp(l.panenKg)+' kg',esc(l.kualitasPanen||'-'),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')]),'Belum ada hasil panen yang dilaporkan.')
     : tabel(['Tanggal','Pegawai','Lahan','Tanaman','Luas ditanam','Jumlah bibit','Status','Detail'],
-      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),'Belum ada kegiatan penanaman yang dilaporkan.');
+      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>'+(me()?.adminLevel==='utama'?'<button class="btn tiny danger" data-act="hapusLaporan" data-id="'+esc(l.id)+'">Hapus</button>':'')]),'Belum ada kegiatan penanaman yang dilaporkan.');
   return {html:head(jenis==='Panen'?'Pencatatan Panen':'Pencatatan Penanaman',btn)+
     '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+draftHtml+body};
 }
@@ -911,6 +911,30 @@ function pageAktivitas() {
         ]), 'Belum ada laporan dari pegawai.')
   };
 }
+async function hapusLaporanAdmin(id) {
+  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang boleh menghapus laporan.');
+  const row=DB.get('laporan',id); if(!row)return;
+  if(!confirm('Hapus laporan ini beserta foto bukti yang tersimpan? Tindakan tidak dapat dibatalkan.'))return;
+  try {
+    await DB.remove('laporan',id,row.fotoPath?[{bucket:'laporan-bukti',path:row.fotoPath}]:[]);
+    await catat('Hapus laporan pegawai', 'Laporan #'+id);
+    await DB.init(true); render();
+  } catch(err){alert('Gagal menghapus laporan: '+err.message);}
+}
+async function hapusRiwayatAdmin(tbl,id) {
+  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang boleh menghapus riwayat.');
+  const row=DB.get(tbl,id); if(!row)return;
+  if(!confirm('Hapus riwayat ini beserta foto buktinya? Tindakan tidak dapat dibatalkan.'))return;
+  const files=[];
+  if(tbl==='absensi'){
+    if(row.masukFotoPath)files.push({bucket:'absensi-bukti',path:row.masukFotoPath});
+    if(row.pulangFotoPath)files.push({bucket:'absensi-bukti',path:row.pulangFotoPath});
+  }
+  if(tbl==='izin'&&row.fotoPath)files.push({bucket:'izin-bukti',path:row.fotoPath});
+  try { await DB.remove(tbl,id,files); await DB.init(true); render(); }
+  catch(err){alert('Gagal menghapus riwayat: '+err.message);}
+}
+
 async function detailLaporan(id) {
   const l = DB.get('laporan', id);
   if (!l) return alert('Laporan tidak ditemukan.');
@@ -1701,6 +1725,8 @@ function aksiKlik(e) {
       DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); await DB.init(true); render(); }).catch(err => alert(err.message));
       return;
     }
+    case 'hapusLaporan': return hapusLaporanAdmin(id);
+    case 'hapusRiwayat': return hapusRiwayatAdmin(b.dataset.tbl,id);
     case 'detailLahan': return detailLahan(id);
     case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
