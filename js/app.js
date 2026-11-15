@@ -798,7 +798,7 @@ async function resetPasswordPegawai(id) {
     const nomor = nomorWhatsApp(pegawai.telepon);
     const pesanWA = `Halo ${pegawai.nama}, password sementara akun SIMTANI Anda: ${temporaryPassword}. Silakan login menggunakan email terdaftar, lalu segera buat password baru setelah berhasil masuk.`;
     const tautanWA = nomor
-      ? `https://api.whatsapp.com/send?phone=${nomor}&text=${encodeURIComponent(pesanWA)}`
+      ? `https://wa.me/${nomor}?text=${encodeURIComponent(pesanWA)}`
       : '';
 
     if (tautanWA && tabWhatsApp && !tabWhatsApp.closed) {
@@ -813,7 +813,10 @@ async function resetPasswordPegawai(id) {
       <p><code>${esc(temporaryPassword)}</code></p>
       <button class="btn" data-act="salinPassword" data-password="${esc(temporaryPassword)}">Salin password</button>
       ${tautanWA
-        ? '<p class="muted">WhatsApp sedang dibuka dengan pesan yang sudah disiapkan. Periksa nomor tujuan, lalu tekan Kirim.</p>'
+        ? `<p><a class="btn ghost" href="${esc(tautanWA)}" target="_blank" rel="noopener noreferrer">Buka WhatsApp dengan pesan</a></p>
+           <p class="muted">Jika teks tidak muncul di WhatsApp, salin pesan berikut dan tempel ke chat pegawai:</p>
+           <p><textarea readonly rows="4" style="width:100%">${esc(pesanWA)}</textarea></p>
+           <button class="btn" data-act="salinPassword" data-password="${esc(temporaryPassword)}">Salin password</button>`
         : '<p class="muted">Nomor WhatsApp belum valid. Sampaikan password sementara secara langsung melalui cara yang aman.</p>'}
       <p class="muted">Pegawai harus mengganti password setelah login.</p>
     `);
