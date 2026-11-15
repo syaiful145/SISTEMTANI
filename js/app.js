@@ -90,6 +90,7 @@ function menuVisible(m) {
   if (!u) return false;
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
+  if (m.id === 'gudang') return true; // Pegawai boleh melihat sisa stok benih meski tidak diberi hak mengelola gudang.
   return !m.akses || u.akses.includes(m.akses);
 }
 
