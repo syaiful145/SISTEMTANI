@@ -91,7 +91,6 @@ function menuVisible(m) {
   if (!u) return false;
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
-  if (m.id === 'penanaman' || m.id === 'panen') return false; // Pekerjaan lapangan dikirim melalui Laporan Harian.
   if (m.id === 'gudang') return true; // Pegawai hanya melihat sisa stok benih.
   return !m.akses || u.akses.includes(m.akses);
 }
@@ -532,14 +531,17 @@ function openLapor() {
       <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
       <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>
       <label class="field full"><span>Pilih lahan *</span><select name="lahanId" required><option value="">Pilih lahan dari daftar admin</option>${DB.all('lahan').filter(x=>x.aktif!==false).map(x=>'<option value="'+x.id+'">'+esc(x.nama)+' · sisa '+Math.max(0,Number(x.luasTotalM2)-DB.all('laporan').filter(l=>String(l.lahanId)===String(x.id)).reduce((n,l)=>n+Number(l.luasM2||0),0)).toLocaleString('id-ID')+' m²</option>').join('')}</select><small class="muted">Luas total dan nama lahan ditentukan admin.</small></label>
-      <label class="field full"><span>Nama tanaman *</span><input name="tanamanNama" required maxlength="120" placeholder="Masukkan nama tanaman"></label>
-      <label class="field"><span>Luas dikerjakan (m²) *</span><input name="luasM2" type="number" min="0.01" step="0.01" required placeholder="Contoh: 25"></label>
-      <label class="field"><span>Jumlah ditanam (batang/bibit)</span><input name="jumlahDitanam" type="number" min="0" step="1" placeholder="Contoh: 100"></label>
-      <label class="field"><span>Umur tanaman saat ini (hari)</span><input name="umurTanamanHari" type="number" min="0" step="1" placeholder="Contoh: 14"></label>
-      <label class="field"><span>Status tanaman</span><select name="statusTanaman"><option value="">Pilih status</option><option>Ditanam</option><option>Dalam perawatan</option><option>Siap panen</option><option>Selesai</option></select></label>
-      <label class="field"><span>Benih yang digunakan</span><select name="benihBarangId"><option value="">Tidak menggunakan benih</option>${DB.all('barang').filter(b => String(b.kategori||'').toLowerCase()==='bibit' && Number(b.stok)>0).map(b => '<option value="'+b.id+'">'+esc(b.nama)+' · sisa '+Number(b.stok)+' '+esc(b.satuan||'')+'</option>').join('')}</select></label>
-      <label class="field"><span>Jumlah benih dipakai</span><input name="benihDipakai" type="number" min="0" step="0.01" placeholder="0"></label>
-      <label class="field full"><span>Deskripsi detail pekerjaan *</span><textarea name="deskripsi" rows="3" required placeholder="Jelaskan pekerjaan yang dilakukan, hasil, kendala, dan kondisi tanaman."></textarea></label>
+      <label class="field full"><span>Nama tanaman *</span><input name="tanamanNama" maxlength="120" placeholder="Masukkan nama tanaman"></label>
+      
+      <div class="field" data-work-field="plant"><span>Luas ditanam (m²) *</span><input name="luasM2" type="number" min="0.01" step="0.01" placeholder="Contoh: 25"></div>
+      <div class="field" data-work-field="plant"><span>Jumlah bibit ditanam</span><input name="jumlahDitanam" type="number" min="0" step="1" placeholder="Contoh: 100"></div>
+      <div class="field" data-work-field="plant"><span>Umur tanaman saat ini (hari)</span><input name="umurTanamanHari" type="number" min="0" step="1" placeholder="Contoh: 14"></div>
+      <div class="field" data-work-field="plant"><span>Status tanaman</span><select name="statusTanaman"><option value="">Pilih status</option><option>Ditanam</option><option>Dalam perawatan</option><option>Siap panen</option><option>Selesai</option></select></div>
+      <div class="field" data-work-field="harvest"><span>Hasil panen (kg) *</span><input name="panenKg" type="number" min="0.01" step="0.01" placeholder="Contoh: 35"></div>
+      <div class="field" data-work-field="harvest"><span>Kualitas hasil panen</span><select name="kualitasPanen"><option value="">Pilih kualitas</option><option value="A">Grade A</option><option value="B">Grade B</option><option value="C">Grade C</option></select></div>
+      <div class="field" data-work-field="material"><span>Bahan/barang yang digunakan</span><select name="benihBarangId"><option value="">Tidak menggunakan barang</option>${DB.all('barang').filter(b => Number(b.stok)>0).map(b => '<option value="'+b.id+'">'+esc(b.nama)+' · sisa '+Number(b.stok)+' '+esc(b.satuan||'')+'</option>').join('')}</select></div>
+      <div class="field" data-work-field="material"><span>Jumlah bahan dipakai</span><input name="benihDipakai" type="number" min="0" step="0.01" placeholder="0"></div>
+      <label class="field full"><span>Catatan / hasil pekerjaan *</span><textarea name="deskripsi" rows="3" required placeholder="Jelaskan pekerjaan yang dilakukan, hasil, kendala, dan kondisi tanaman."></textarea></label>
       <div class="field full">
         <span>Foto langsung dari kamera (wajib)</span>
         <video id="lapor-video" autoplay playsinline muted style="width:100%;max-height:320px;background:#111;border-radius:12px;display:none"></video>
@@ -560,6 +562,26 @@ function openLapor() {
   box.querySelectorAll('[data-tutup]').forEach(x => x.onclick = close);
   const video = $('#lapor-video'), canvas = $('#lapor-canvas');
   const info = $('#lapor-camera-info'), gpsInfo = $('#lapor-gps-info'), errBox = $('#lapor-error');
+  const jenisSelect = form.elements.jenis;
+  const syncWorkFields = () => {
+    const kind = jenisSelect.value;
+    const plant = kind === 'Penanaman';
+    const harvest = kind === 'Panen';
+    box.querySelectorAll('[data-work-field]').forEach(el => {
+      const show = (el.dataset.workField === 'plant' && plant) ||
+        (el.dataset.workField === 'harvest' && harvest) ||
+        (el.dataset.workField === 'material' && !harvest);
+      el.style.display = show ? '' : 'none';
+      const input = el.querySelector('input,select');
+      if (input) input.required = (el.dataset.workField === 'plant' && input.name === 'luasM2') || (el.dataset.workField === 'harvest' && input.name === 'panenKg');
+    });
+    form.elements.tanamanNama.required = true;
+    if (plant) form.elements.tanamanNama.placeholder = 'Nama tanaman yang ditanam';
+    else if (harvest) form.elements.tanamanNama.placeholder = 'Nama tanaman yang dipanen';
+    else form.elements.tanamanNama.placeholder = 'Tanaman yang dirawat';
+  };
+  jenisSelect.addEventListener('change', syncWorkFields);
+  syncWorkFields();
   $('#lapor-buka-kamera').onclick = async () => {
     errBox.textContent = '';
     try {
@@ -636,14 +658,17 @@ $('#lapor-ulang-foto').onclick = () => {
     const lahan = lahanId ? DB.get('lahan',lahanId) : null;
     const benihBarangId = form.elements.benihBarangId.value ? Number(form.elements.benihBarangId.value) : null;
     const benihDipakai = Number(form.elements.benihDipakai.value || 0);
+    const jenis=form.elements.jenis.value;
     const luasM2 = form.elements.luasM2.value === '' ? null : Number(form.elements.luasM2.value);
     const jumlahDitanam = form.elements.jumlahDitanam.value === '' ? null : Number(form.elements.jumlahDitanam.value);
     const umurTanamanHari = form.elements.umurTanamanHari.value === '' ? null : Number(form.elements.umurTanamanHari.value);
-    if (benihDipakai < 0 || (benihDipakai > 0 && !benihBarangId) || (benihBarangId && benihDipakai <= 0)) { errBox.textContent = 'Pilih benih dan isi jumlah pemakaian lebih dari nol, atau kosongkan keduanya.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
-    if (!lahan || !lahan.aktif || (luasM2 !== null && (!Number.isFinite(luasM2)||luasM2<=0)) || (jumlahDitanam !== null && (!Number.isInteger(jumlahDitanam)||jumlahDitanam<0)) || (umurTanamanHari !== null && (!Number.isInteger(umurTanamanHari)||umurTanamanHari<0))) { errBox.textContent='Periksa kembali luas, jumlah ditanam, dan umur tanaman.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
+    const panenKg = form.elements.panenKg.value === '' ? null : Number(form.elements.panenKg.value);
+    const kualitasPanen = form.elements.kualitasPanen.value || null;
+    if (benihDipakai < 0 || (benihDipakai > 0 && !benihBarangId) || (benihBarangId && benihDipakai <= 0)) { errBox.textContent = 'Pilih barang dan isi jumlah pemakaian lebih dari nol, atau kosongkan keduanya.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
+    if (!lahan || !lahan.aktif || (jenis==='Penanaman' && (!Number.isFinite(luasM2)||luasM2<=0)) || (jenis==='Panen' && (!Number.isFinite(panenKg)||panenKg<=0)) || (luasM2 !== null && (!Number.isFinite(luasM2)||luasM2<=0)) || (jumlahDitanam !== null && (!Number.isInteger(jumlahDitanam)||jumlahDitanam<0)) || (umurTanamanHari !== null && (!Number.isInteger(umurTanamanHari)||umurTanamanHari<0))) { errBox.textContent='Periksa kembali lahan, luas tanam, jumlah bibit, umur, dan hasil panen.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
     const barangBenih = benihBarangId ? DB.get('barang',benihBarangId) : null;
     if (benihBarangId && (!barangBenih || benihDipakai > Number(barangBenih.stok))) { errBox.textContent='Stok benih tidak mencukupi.'; submit.disabled=false; submit.textContent='Kirim Laporan'; return; }
-    const data = { tanggal: form.elements.tanggal.value, jenis: form.elements.jenis.value, lokasi: lahan.nama, lahanId, deskripsi: form.elements.deskripsi.value.trim(), tanamanNama:form.elements.tanamanNama.value, luasM2, jumlahDitanam, umurTanamanHari, statusTanaman:form.elements.statusTanaman.value||null, benihBarangId, benihDipakai:benihBarangId?benihDipakai:null };
+    const data = { tanggal: form.elements.tanggal.value, jenis, lokasi: lahan.nama, lahanId, deskripsi: form.elements.deskripsi.value.trim(), tanamanNama:form.elements.tanamanNama.value.trim(), luasM2:jenis==='Penanaman'?luasM2:null, jumlahDitanam:jenis==='Penanaman'?jumlahDitanam:null, umurTanamanHari, statusTanaman:form.elements.statusTanaman.value||null, panenKg, kualitasPanen, benihBarangId, benihDipakai:benihBarangId?benihDipakai:null };
     const path = `${u.authId}/${Date.now()}-${crypto.randomUUID()}.jpg`;
     try {
       const { error: uploadError } = await supabaseClient.storage.from('laporan-bukti').upload(path, capturedBlob, { contentType: 'image/jpeg', upsert: false });
@@ -652,7 +677,7 @@ $('#lapor-ulang-foto').onclick = () => {
       try {
         const { error: saveError } = await supabaseClient.rpc('pegawai_kirim_laporan_lapangan', {
           p_tanggal:data.tanggal, p_jenis:data.jenis, p_lokasi:data.lokasi, p_lahan_id:data.lahanId, p_deskripsi:data.deskripsi,
-          p_tanaman_nama:data.tanamanNama, p_luas_m2:data.luasM2, p_jumlah_ditanam:data.jumlahDitanam,
+          p_tanaman_nama:data.tanamanNama, p_luas_m2:data.luasM2, p_jumlah_ditanam:data.jumlahDitanam, p_panen_kg:data.panenKg, p_kualitas_panen:data.kualitasPanen,
           p_umur_tanaman_hari:data.umurTanamanHari, p_status_tanaman:data.statusTanaman,
           p_benih_barang_id:data.benihBarangId, p_benih_dipakai:data.benihDipakai,
           p_foto_path:path, p_foto_lat:gps.lat, p_foto_lon:gps.lon, p_foto_accuracy:gps.accuracy,
