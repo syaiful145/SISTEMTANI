@@ -21,12 +21,13 @@
       const own=DB.all('absensi').filter(x=>String(x.pegawaiId)===String(u.id)).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
       const r=own.find(x=>x.tanggal===today);
       const mine=leaves.filter(x=>String(x.pegawaiId)===String(u.id)).sort((a,b)=>b.id-a.id);
-      const state=approvedA(u.id,today)?'Izin':statusA(r,sched);
-      const action=!r?'<button class="btn" data-act="att-photo-in">Absen Masuk · Foto</button>':!r.pulangAt?'<button class="btn" data-act="att-photo-out">Absen Pulang · Foto</button>':'<span class="tag green">Absensi selesai</span>';
+      const onLeave=approvedA(u.id,today);
+      const state=onLeave?'Izin':statusA(r,sched);
+      const action=onLeave?'<span class="tag blue">Izin disetujui · Tidak perlu absen</span>':!r?'<button class="btn" data-act="att-photo-in">Absen Masuk · Foto</button>':!r.pulangAt?'<button class="btn" data-act="att-photo-out">Absen Pulang · Foto</button>':'<span class="tag green">Absensi selesai</span>';
       return {html:head('Absensi Pegawai',action)+'<section class="card"><h3>Jadwal Kerja</h3><p>Masuk <b>'+escA(String(sched.jamMasuk).slice(0,5))+'</b> · Pulang <b>'+escA(String(sched.jamPulang).slice(0,5))+'</b></p><p>Toleransi terlambat: '+Number(sched.toleransiTerlambat||0)+' menit</p><p>Status hari ini: '+tagA(state)+'</p><button class="btn ghost" data-act="att-leave">+ Ajukan Izin / Sakit</button></section>'+
-      (r?'<section class="card"><h3>Absensi Hari Ini</h3><p>Masuk: '+timeA(r.masukAt)+'</p><p>Pulang: '+timeA(r.pulangAt)+'</p><p>Lokasi masuk: '+escA(r.masukAlamat||'-')+'</p><p>Lokasi pulang: '+escA(r.pulangAlamat||'-')+'</p></section>':'<section class="card"><p>Belum ada catatan absensi hari ini.</p></section>')+
+      (onLeave?'<section class="card"><h3>Status Hari Ini</h3><p>'+tagA('Izin')+'</p><p>Pengajuan izin/sakit telah disetujui. Pegawai tidak perlu melakukan absensi hari ini.</p></section>':r?'<section class="card"><h3>Absensi Hari Ini</h3><p>Masuk: '+timeA(r.masukAt)+'</p><p>Pulang: '+timeA(r.pulangAt)+'</p><p>Lokasi masuk: '+escA(r.masukAlamat||'-')+'</p><p>Lokasi pulang: '+escA(r.pulangAlamat||'-')+'</p></section>':'<section class="card"><p>Belum ada catatan absensi hari ini.</p></section>')+
       (own.length?'<h3>Riwayat Absensi</h3>'+historyTreeA(own):'')+
-      '<h3>Riwayat Pengajuan Izin</h3>'+tabel(['Tanggal','Jenis','Alasan','Status','Catatan Admin'],mine.map(x=>[dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),tagA(x.status),escA(x.catatanAdmin||'-')]),'Belum ada pengajuan izin.')};
+      '<h3>Riwayat Pengajuan Izin</h3>'+(mine.length?leaveTreeA(mine,false):'<p class="muted">Belum ada pengajuan izin.</p>')};
     }
     const staff=DB.all('pegawai').filter(x=>x.statusVerifikasi==='disetujui'), todayRows=DB.all('absensi').filter(x=>x.tanggal===today);
     const approved=leaves.filter(x=>x.status==='disetujui'&&x.tanggalMulai<=today&&x.tanggalSelesai>=today);
@@ -38,6 +39,7 @@
       '<section class="stats-grid"><div class="stat-card"><span>Hadir</span><strong>'+attended+'</strong></div><div class="stat-card"><span>Terlambat</span><strong>'+late+'</strong></div><div class="stat-card"><span>Izin</span><strong>'+approved.length+'</strong></div><div class="stat-card"><span>Tidak hadir</span><strong>'+absent+'</strong></div></section>'+
       '<h3>Rekap Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],staff.map(p=>{const r=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const st=r?statusA(r,sched):approvedA(p.id,today)?'Izin':'Tidak hadir';return [escA(p.nama),tagA(st),timeA(r&&r.masukAt),timeA(r&&r.pulangAt),escA(r&&r.masukAlamat||'-'),escA(r&&r.pulangAlamat||'-')];}),'Belum ada pegawai.')+
       '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Tanggal','Jenis','Alasan','Aksi'],pending.map(x=>[escA(namaPegawai(x.pegawaiId)),dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),'<button class="btn tiny" data-act="att-review" data-id="'+x.id+'">Periksa</button>']),'Tidak ada pengajuan menunggu.')+
+      (leaves.some(x=>x.status!=='menunggu')?'<h3>Arsip Izin Disetujui / Ditolak</h3>'+leaveTreeA(leaves.filter(x=>x.status!=='menunggu'),true):'')+
       (DB.all('absensi').length?'<h3>Arsip Riwayat Absensi</h3>'+historyTreeA(DB.all('absensi'),true):'')};
   }
   async function saveScheduleA(form){
@@ -74,14 +76,25 @@
     $('#att-shot').onclick=()=>{if(!video.videoWidth)return;$('#att-shot').disabled=true;info.textContent='Mengambil lokasi GPS...';if(!navigator.geolocation){err.textContent='GPS tidak didukung.';return;}navigator.geolocation.getCurrentPosition(async pos=>{try{gps={lat:pos.coords.latitude,lon:pos.coords.longitude,accuracy:pos.coords.accuracy};gps.place=await namaLokasiGPS(gps.lat,gps.lon);stamp=new Date();canvas.width=video.videoWidth;canvas.height=video.videoHeight;const ctx=canvas.getContext('2d');ctx.drawImage(video,0,0);const h=canvas.height,w=canvas.width,band=Math.max(150,Math.round(h*.28));ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(0,h-band,w,band);ctx.fillStyle='#fff';ctx.font='bold '+Math.max(18,Math.round(w/42))+'px sans-serif';ctx.fillText(stamp.toLocaleString('id-ID'),16,h-band+32);ctx.font=Math.max(14,Math.round(w/55))+'px sans-serif';ctx.fillText(gps.place.slice(0,100),16,h-band+65);ctx.fillText('GPS '+gps.lat.toFixed(6)+', '+gps.lon.toFixed(6)+' ±'+Math.round(gps.accuracy)+'m',16,h-16);canvas.toBlob(b=>{blob=b;video.style.display='none';canvas.style.display='block';stopA();$('#att-send').disabled=!b;info.textContent='Foto siap dengan waktu dan lokasi.';},'image/jpeg',.88);}catch(e){err.textContent=e.message;$('#att-shot').disabled=false;}},e=>{err.textContent='Lokasi gagal: '+e.message;$('#att-shot').disabled=false;},{enableHighAccuracy:true,timeout:20000,maximumAge:0});};
     $('#att-send').onclick=async()=>{if(!blob||!gps||!stamp)return;const btn=$('#att-send');btn.disabled=true;btn.textContent='Mengirim...';const path=u.authId+'/absensi-'+kind+'-'+Date.now()+'.jpg';try{const up=await supabaseClient.storage.from('absensi-bukti').upload(path,blob,{contentType:'image/jpeg'});if(up.error)throw up.error;const fields=kind==='masuk'?{masukAt:stamp.toISOString(),masukLat:gps.lat,masukLon:gps.lon,masukAlamat:gps.place,masukFotoPath:path,masukFotoCapturedAt:stamp.toISOString(),masukAccuracy:gps.accuracy}:{pulangAt:stamp.toISOString(),pulangLat:gps.lat,pulangLon:gps.lon,pulangAlamat:gps.place,pulangFotoPath:path,pulangFotoCapturedAt:stamp.toISOString(),pulangAccuracy:gps.accuracy};const existing=DB.all('absensi').find(x=>String(x.pegawaiId)===String(u.id)&&x.tanggal===dayA());try{if(kind==='masuk'){if(existing)throw Error('Anda sudah absen masuk hari ini.');await DB.add('absensi',Object.assign({pegawaiId:u.id,authUserId:u.authId,tanggal:dayA()},fields));}else{if(!existing||existing.pulangAt)throw Error('Data absen masuk tidak ditemukan atau sudah absen pulang.');await DB.update('absensi',existing.id,fields);}}catch(e){await supabaseClient.storage.from('absensi-bukti').remove([path]);throw e;}close();await refreshA();}catch(e){err.textContent='Absensi gagal: '+e.message;btn.disabled=false;btn.textContent='Kirim Absensi';}};
   }
-  async function leaveA(){
-    const u=me();if(u.tipe!=='pegawai')return;
-    const start=prompt('Tanggal mulai izin (YYYY-MM-DD)',dayA());if(!start)return;
-    const end=prompt('Tanggal selesai izin (YYYY-MM-DD)',start);if(!end)return;
-    const kind=prompt('Jenis: Izin atau Sakit','Izin');if(!kind)return;
-    const reason=prompt('Alasan izin');if(!reason)return;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||! /^\d{4}-\d{2}-\d{2}$/.test(end)||end<start||!['izin','sakit'].includes(kind.toLowerCase()))return alert('Tanggal atau jenis izin tidak valid.');
-    const input=document.createElement('input');input.type='file';input.accept='image/*';input.capture='environment';input.onchange=async()=>{const file=input.files&&input.files[0];if(!file)return;if(file.size>5*1024*1024)return alert('Foto maksimal 5 MB.');const path=u.authId+'/izin-'+Date.now()+'.jpg';try{const up=await supabaseClient.storage.from('izin-bukti').upload(path,file,{contentType:file.type||'image/jpeg'});if(up.error)throw up.error;try{await DB.add('izin',{pegawaiId:u.id,authUserId:u.authId,tanggalMulai:start,tanggalSelesai:end,jenis:kind[0].toUpperCase()+kind.slice(1).toLowerCase(),alasan:reason,fotoPath:path,status:'menunggu'});}catch(e){await supabaseClient.storage.from('izin-bukti').remove([path]);throw e;}await refreshA();}catch(e){alert('Pengajuan izin gagal: '+e.message);}};input.click();
+  function leaveA(){
+    if(me()?.tipe!=='pegawai')return;
+    return ajukanIzinPegawai();
+  }
+  function leaveTreeA(rows, admin=false){
+    const years=[...new Set(rows.map(x=>String(x.tanggalMulai||'').slice(0,4)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+    return years.map(y=>'<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><b>Tahun '+escA(y)+'</b><button class="btn tiny ghost" data-act="att-leave-year" data-year="'+y+'" data-admin="'+(admin?'1':'0')+'">Detail</button></section>').join('');
+  }
+  function leaveYearA(year, admin=false){
+    const rows=DB.all('izin').filter(x=>String(x.tanggalMulai||'').startsWith(year+'-')&&(admin||String(x.pegawaiId)===String(me().id)));
+    const months=[...new Set(rows.map(x=>String(x.tanggalMulai).slice(5,7)))].sort((a,b)=>b.localeCompare(a));
+    openInfo('Riwayat Izin · '+escA(year),months.map(m=>'<section class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><b>'+new Date(year+'-'+m+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long'})+'</b><button class="btn tiny ghost" data-act="att-leave-month" data-year="'+year+'" data-month="'+m+'" data-admin="'+(admin?'1':'0')+'">Detail</button></section>').join('')+'<button class="btn ghost" data-tutup>Tutup</button>');
+    const close=$('#modal [data-tutup]');if(close)close.onclick=tutupModal;
+  }
+  function leaveMonthA(year, month, admin=false){
+    const rows=DB.all('izin').filter(x=>String(x.tanggalMulai||'').startsWith(year+'-'+month+'-')&&(admin||String(x.pegawaiId)===String(me().id))).sort((a,b)=>String(b.tanggalMulai).localeCompare(String(a.tanggalMulai)));
+    const html=rows.map(x=>'<section class="card"><b>'+dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai)+'</b>'+(admin?'<p>Pegawai: '+escA(namaPegawai(x.pegawaiId))+'</p>':'')+'<p>'+escA(x.jenis)+' · '+tagA(x.status)+'</p><p>'+escA(x.alasan)+'</p>'+(x.catatanAdmin?'<p>Catatan admin: '+escA(x.catatanAdmin)+'</p>':'')+(x.fotoPath?'<button class="btn tiny ghost" data-act="lihatBuktiIzin" data-id="'+x.id+'">Lihat bukti</button>':'')+'</section>').join('');
+    openInfo('Riwayat Izin · '+new Date(year+'-'+month+'-01T12:00:00').toLocaleDateString('id-ID',{month:'long',year:'numeric'}),html+'<button class="btn ghost" data-tutup>Tutup</button>');
+    const close=$('#modal [data-tutup]');if(close)close.onclick=tutupModal;
   }
   function historyTreeA(rows, admin=false){
     const years={};
@@ -147,6 +160,8 @@
       case 'att-detail':e.preventDefault();detailAttendanceA(id);break;
       case 'att-history-year':e.preventDefault();historyYearA(b.dataset.year,isAdmin());break;
       case 'att-history-month':e.preventDefault();historyMonthA(b.dataset.year,b.dataset.month,isAdmin());break;
+      case 'att-leave-year':e.preventDefault();leaveYearA(b.dataset.year,b.dataset.admin==='1');break;
+      case 'att-leave-month':e.preventDefault();leaveMonthA(b.dataset.year,b.dataset.month,b.dataset.admin==='1');break;
     }
   });
 })();
