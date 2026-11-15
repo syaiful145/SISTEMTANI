@@ -15,9 +15,14 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) throw new Error("Sesi Admin tidak ditemukan.");
     const url = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !anonKey || !serviceKey) throw new Error("Secret Edge Function belum lengkap.");
+    const publishableRaw = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+    const secretRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
+    if (!url || !publishableRaw || !secretRaw) throw new Error("Konfigurasi bawaan Supabase belum lengkap.");
+    const publishableKeys = JSON.parse(publishableRaw);
+    const secretKeys = JSON.parse(secretRaw);
+    const anonKey = publishableKeys.default;
+    const serviceKey = secretKeys.default;
+    if (!anonKey || !serviceKey) throw new Error("API key default Supabase tidak ditemukan.");
 
     const token = authHeader.slice(7);
     const authClient = createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
