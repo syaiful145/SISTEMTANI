@@ -837,6 +837,11 @@ function pageGudang() {
 function pagePekerjaan(jenis) {
   const admin=isAdmin();
   const rows=DB.all('laporan').filter(l=>l.jenis===jenis && (admin || l.pegawaiId===me().id)).slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  const drafts = admin ? [] : DB.all('laporanDraft').filter(d=>String(d.pegawaiId)===String(me().id) && d.data?.jenis===jenis);
+  const draftHtml = drafts.length ? '<h3>Draft '+esc(jenis)+' belum dikirim</h3>' + tabel(['Tanggal','Tanaman','Lahan','Aksi'], drafts.map(d=>[
+    esc(d.data?.tanggal||'-'),esc(d.data?.tanamanNama||'-'),esc((DB.get('lahan',d.data?.lahanId)||{}).nama||'-'),
+    '<div class="row-actions"><button class="btn tiny ghost" data-act="editDraftLaporan" data-id="'+esc(d.id)+'">Edit</button><button class="btn tiny" data-act="kirimDraftLaporan" data-id="'+esc(d.id)+'">Kirim</button><button class="btn tiny ghost" data-act="hapusDraftLaporan" data-id="'+esc(d.id)+'">Hapus</button></div>'
+  ])) : (admin ? '' : '<p class="muted">Belum ada Draft '+esc(jenis)+'.</p>');
   const btn=admin?'':'<button class="btn" data-act="laporJenis" data-jenis="'+jenis+'">+ Catat '+jenis+'</button>';
   const body=jenis==='Panen'
     ? tabel(['Tanggal','Pegawai','Lahan','Tanaman','Hasil panen','Kualitas','Status','Detail'],
@@ -844,7 +849,7 @@ function pagePekerjaan(jenis) {
     : tabel(['Tanggal','Pegawai','Lahan','Tanaman','Luas ditanam','Jumlah bibit','Status','Detail'],
       rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),l.status==='diterima'?'<span class="tag green">Diterima</span>':'<span class="tag amber">Menunggu</span>','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+esc(l.id)+'">Detail</button>']),'Belum ada kegiatan penanaman yang dilaporkan.');
   return {html:head(jenis==='Panen'?'Pencatatan Panen':'Pencatatan Penanaman',btn)+
-    '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+body};
+    '<p class="muted">'+(jenis==='Panen'?'Pegawai mencatat hasil panen dalam kilogram dan kualitasnya.':'Pegawai mencatat luas tanam, jumlah bibit, dan penggunaan bahan.')+'</p>'+draftHtml+body};
 }
 
 function pageAktivitas() {
