@@ -522,7 +522,7 @@ async function namaLokasiGPS(lat, lon) {
 function waktuLokal(d) {
   return d.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'medium' });
 }
-function openLapor(jenisAwal = '') {
+function openLapor(jenisAwal = '', draftId = null) {
   const u = me();
   let capturedBlob = null, capturedAt = null, gps = null;
   const box = $('#modal');
@@ -556,7 +556,7 @@ function openLapor(jenisAwal = '') {
         <p class="muted" id="lapor-gps-info">Lokasi GPS belum diambil.</p>
       </div>
       <p class="form-error full" id="lapor-error"></p>
-      <div class="form-actions full"><button type="button" class="btn ghost" data-tutup>Batal</button><button type="submit" class="btn">Kirim Laporan</button></div>
+      <div class="form-actions full"><button type="button" class="btn ghost" data-tutup>Batal</button><button type="button" class="btn ghost" id="lapor-simpan-draft">Simpan Draft</button><button type="submit" class="btn">Kirim Laporan</button></div>
     </form></div>`;
   box.classList.remove('hidden');
   const close = () => { stopLaporCamera(); tutupModal(); };
@@ -583,6 +583,23 @@ function openLapor(jenisAwal = '') {
   };
   jenisSelect.addEventListener('change', syncWorkFields);
   syncWorkFields();
+  const existingDraft = draftId ? DB.get('laporanDraft', draftId) : null;
+  if (existingDraft && existingDraft.data) {
+    Object.entries(existingDraft.data).forEach(([key,value]) => { if (form.elements[key] && value != null) form.elements[key].value = value; });
+    syncWorkFields();
+  }
+  $('#lapor-simpan-draft').onclick = async () => {
+    errBox.textContent = '';
+    const f = form;
+    const data = { tanggal:f.elements.tanggal.value, jenis:f.elements.jenis.value, lahanId:f.elements.lahanId.value || null, tanamanNama:f.elements.tanamanNama.value.trim(), luasM2:f.elements.luasM2.value || null, jumlahDitanam:f.elements.jumlahDitanam.value || null, umurTanamanHari:f.elements.umurTanamanHari.value || null, statusTanaman:f.elements.statusTanaman.value || null, panenKg:f.elements.panenKg.value || null, kualitasPanen:f.elements.kualitasPanen.value || null, benihBarangId:f.elements.benihBarangId.value || null, benihDipakai:f.elements.benihDipakai.value || null, deskripsi:f.elements.deskripsi.value.trim() };
+    if (!data.tanggal || !data.jenis || !data.lahanId) { errBox.textContent='Isi tanggal, jenis kegiatan, dan lahan sebelum menyimpan draft.'; return; }
+    const btn=$('#lapor-simpan-draft'); btn.disabled=true; btn.textContent='Menyimpan...';
+    try {
+      if (draftId) await DB.update('laporanDraft', draftId, {data, updatedAt:new Date().toISOString()});
+      else { const saved=await DB.add('laporanDraft',{pegawaiId:u.id,data}); draftId=saved.id; }
+      await DB.init(false); close(); render();
+    } catch(error) { errBox.textContent='Draft gagal disimpan: '+error.message; btn.disabled=false; btn.textContent='Simpan Draft'; }
+  };
   $('#lapor-buka-kamera').onclick = async () => {
     errBox.textContent = '';
     try {
@@ -690,6 +707,7 @@ $('#lapor-ulang-foto').onclick = () => {
         if (!reportSaved) await supabaseClient.storage.from('laporan-bukti').remove([path]);
         throw error;
       }
+      if (draftId) await DB.remove('laporanDraft', draftId);
       await DB.init(false);
       await catat('Kirim laporan harian', `${data.jenis} · ${data.lokasi}`);
       close(); render();
@@ -832,8 +850,13 @@ function pageAktivitas() {
   const u = me();
   if (u.tipe === 'pegawai') {
     const rows = DB.all('laporan').filter(l => l.pegawaiId === u.id).sort((a, b) => b.id - a.id);
+    const drafts = DB.all('laporanDraft').filter(d => String(d.pegawaiId) === String(u.id)).sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt));
+    const draftHtml = drafts.length ? '<h3>Draft belum dikirim</h3>' + tabel(['Tanggal','Kegiatan','Tanaman','Aksi'], drafts.map(d => [
+      esc(d.data?.tanggal || '-'), esc(d.data?.jenis || '-'), esc(d.data?.tanamanNama || '-'),
+      '<div class="row-actions"><button class="btn tiny ghost" data-act="editDraftLaporan" data-id="'+esc(d.id)+'">Edit</button><button class="btn tiny" data-act="kirimDraftLaporan" data-id="'+esc(d.id)+'">Kirim</button><button class="btn tiny ghost" data-act="hapusDraftLaporan" data-id="'+esc(d.id)+'">Hapus</button></div>'
+    ])) : '<p class="muted">Belum ada draft tersimpan.</p>';
     return {
-      html: head('Pekerjaan Lapangan', '<button class="btn" data-act="lapor">+ Catat Pekerjaan</button>') +
+      html: head('Pekerjaan Lapangan', '<button class="btn" data-act="lapor">+ Catat Pekerjaan</button>') + draftHtml +
         tabel(['Tanggal', 'Kegiatan', 'Lahan', 'Tanaman', 'Luas', 'Status', 'Detail'],
           rows.map(l => [tgl(l.tanggal), esc(l.jenis), esc((DB.get('lahan',l.lahanId)||{}).nama||l.lokasi||'-'), esc(l.tanamanNama||'-'), l.luasM2==null?'-':esc(l.luasM2)+' m²',
             l.status === 'diterima' ? '<span class="tag green">Diterima</span>' : '<span class="tag amber">Belum diterima</span>',
@@ -1665,6 +1688,9 @@ function aksiKlik(e) {
     case 'transaksi': return openTransaksi();
     case 'lapor': return openLapor();
     case 'laporJenis': return openLapor(b.dataset.jenis);
+    case 'editDraftLaporan': { const d=DB.get('laporanDraft',id); return d ? openLapor(d.data?.jenis || '',id) : alert('Draft tidak ditemukan.'); }
+    case 'kirimDraftLaporan': { const d=DB.get('laporanDraft',id); return d ? openLapor(d.data?.jenis || '',id) : alert('Draft tidak ditemukan.'); }
+    case 'hapusDraftLaporan': return (async()=>{ if(!confirm('Hapus draft ini?')) return; try { await DB.remove('laporanDraft',id); await DB.init(false); render(); } catch(e) { alert(e.message); } })();
     case 'absenMasuk': return lakukanAbsensi('masuk');
     case 'absenPulang': return lakukanAbsensi('pulang');
     case 'ajukanIzin': return ajukanIzinPegawai();
