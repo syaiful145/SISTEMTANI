@@ -31,6 +31,8 @@
         <div id="register-access" class="register-access">
           <div class="login-separator"><span>Belum punya akun pegawai?</span></div>
           <button type="button" class="btn ghost register-toggle" id="show-register">Daftar Pegawai</button>
+          <div class="login-separator"><span>Ingin mendaftar sebagai admin?</span></div>
+          <button type="button" class="btn ghost register-toggle" id="show-admin-register">Daftar Admin</button>
         </div>
       </div>
       <div id="register-area" class="hidden">
@@ -49,6 +51,20 @@
           <p id="r-msg" class="form-message" role="status"></p>
           <button class="btn login-submit" type="submit">Kirim Pendaftaran</button>
           <button class="btn ghost register-toggle" id="back-to-login" type="button">Kembali ke Login</button>
+        </form>
+      </div>
+      <div id="register-admin-area" class="hidden">
+        <h2 class="forgot-title">Pendaftaran Admin Kedua</h2>
+        <p class="muted">Permohonan akan diperiksa Admin Utama. Akun belum dapat digunakan sebelum disetujui.</p>
+        <form id="register-admin-form" class="auth-form" autocomplete="on">
+          <label class="field"><span>Nama lengkap</span><input id="ra-nama" autocomplete="name" required></label>
+          <label class="field"><span>Username</span><input id="ra-username" autocomplete="username" required></label>
+          <label class="field"><span>Email aktif</span><input id="ra-email" type="email" autocomplete="email" required></label>
+          <label class="field"><span>Password (minimal 8 karakter)</span><input id="ra-pass" type="password" minlength="8" autocomplete="new-password" required></label>
+          <label class="field"><span>Ulangi password</span><input id="ra-pass2" type="password" minlength="8" autocomplete="new-password" required></label>
+          <p id="ra-msg" class="form-message" role="status"></p>
+          <button class="btn login-submit" type="submit">Kirim Permohonan Admin</button>
+          <button class="btn ghost register-toggle" id="back-admin-login" type="button">Kembali ke Login</button>
         </form>
       </div>
       <div id="forgot-area" class="hidden">
