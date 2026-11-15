@@ -295,17 +295,18 @@ function cfgLahan() {
 function detailLahan(id) {
   const land=DB.get('lahan',id); if(!land)return;
   const reports=DB.all('laporan').filter(l=>String(l.lahanId)===String(id));
-  const used=reports.reduce((n,l)=>n+Number(l.luasM2||0),0);
-  const planted=reports.reduce((n,l)=>n+Number(l.jumlahDitanam||0),0);
-  const crops=[...new Set(reports.map(l=>l.tanamanNama).filter(Boolean))];
+  const plantReports=reports.filter(l=>l.jenis==='Penanaman');
+  const used=plantReports.reduce((n,l)=>n+Number(l.luasM2||0),0);
+  const planted=plantReports.reduce((n,l)=>n+Number(l.jumlahDitanam||0),0);
+  const crops=[...new Set(plantReports.map(l=>l.tanamanNama).filter(Boolean))];
   const rows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
   openInfo('Detail Lahan · '+esc(land.nama),
     '<div class="detail-grid">'+
     '<p><strong>Nama lahan</strong><br>'+esc(land.nama)+'</p>'+
     '<p><strong>Lokasi</strong><br>'+esc(land.lokasi||'-')+'</p>'+
     '<p><strong>Luas total</strong><br>'+rp(land.luasTotalM2)+' m²</p>'+
-    '<p><strong>Luas terlapor dikerjakan</strong><br>'+rp(used)+' m²</p>'+
-    '<p><strong>Sisa luas berdasarkan laporan</strong><br>'+rp(Math.max(0,Number(land.luasTotalM2)-used))+' m²</p>'+
+    '<p><strong>Luas sudah ditanami</strong><br>'+rp(used)+' m²</p>'+
+    '<p><strong>Sisa lahan belum ditanami</strong><br>'+rp(Math.max(0,Number(land.luasTotalM2)-used))+' m²</p>'+
     '<p><strong>Jumlah tanaman dilaporkan</strong><br>'+rp(planted)+'</p>'+
     '<p><strong>Jenis tanaman</strong><br>'+esc(crops.join(', ')||'-')+'</p>'+
     '</div><h4>Riwayat Pekerjaan Pegawai</h4>'+
