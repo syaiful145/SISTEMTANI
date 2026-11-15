@@ -542,7 +542,7 @@ function openLapor(jenisAwal = '', draftId = null) {
   const box = $('#modal');
   box.innerHTML = `<div class="modal-box">
     <div class="modal-head"><h3>Kirim Laporan Harian</h3><button class="icon-btn" type="button" data-tutup>✕</button></div>
-    <form id="form-lapor-bukti" class="form-grid">
+    <form id="form-lapor-bukti" class="form-grid" novalidate>
       <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
       <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}" ${x===jenisAwal?'selected':''}>${esc(x)}</option>`).join('')}</select></label>
       <label class="field full"><span>Pilih lahan *</span><select name="lahanId" required><option value="">Pilih lahan dari daftar admin</option>${DB.all('lahan').filter(x=>x.aktif!==false).map(x=>'<option value="'+x.id+'">'+esc(x.nama)+' · sisa '+Math.max(0,Number(x.luasTotalM2)-DB.all('laporan').filter(l=>String(l.lahanId)===String(x.id)).reduce((n,l)=>n+Number(l.luasM2||0),0)).toLocaleString('id-ID')+' m²</option>').join('')}</select><small class="muted">Luas total dan nama lahan ditentukan admin.</small></label>
@@ -707,6 +707,11 @@ $('#lapor-ulang-foto').onclick = () => {
     e.preventDefault(); errBox.textContent = '';
     const form = e.currentTarget, submit = form.querySelector('button[type="submit"]');
     const savedProof = existingDraft?.data || {};
+    const requiredFields = [form.elements.tanggal, form.elements.jenis, form.elements.lahanId, form.elements.tanamanNama, form.elements.deskripsi];
+    const missingField = requiredFields.find(field => !String(field.value || '').trim());
+    if (missingField) { errBox.textContent = 'Lengkapi tanggal, jenis kegiatan, lahan, nama tanaman, dan catatan pekerjaan.'; missingField.focus(); return; }
+    if (form.elements.jenis.value === 'Penanaman' && !(Number(form.elements.luasM2.value) > 0)) { errBox.textContent = 'Isi luas ditanam lebih dari 0 m².'; form.elements.luasM2.focus(); return; }
+    if (form.elements.jenis.value === 'Panen' && !(Number(form.elements.panenKg.value) > 0)) { errBox.textContent = 'Isi hasil panen lebih dari 0 kg.'; form.elements.panenKg.focus(); return; }
     const proofGps = gps || (savedProof.fotoPath ? {lat:Number(savedProof.fotoLat),lon:Number(savedProof.fotoLon),accuracy:Number(savedProof.fotoAccuracy),place:savedProof.fotoLokasi} : null);
     const proofCapturedAt = capturedAt || (savedProof.fotoCapturedAt ? new Date(savedProof.fotoCapturedAt) : null);
     if ((!capturedBlob && !savedProof.fotoPath) || !proofGps || !proofCapturedAt) { errBox.textContent = 'Wajib ambil foto langsung dari kamera beserta lokasi GPS, lalu simpan Draft atau kirim.'; return; }
