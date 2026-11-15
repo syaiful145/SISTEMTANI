@@ -370,17 +370,12 @@ function cfgPegawai() {
     judul: 'Data Pegawai',
     tambah: false, ubah: true, hapus: true,
     nama: r => r.nama,
-    extra: r => `${r.statusVerifikasi === 'menunggu' ? `<button class="btn tiny" data-act="setujuiPegawai" data-id="${r.id}">Setujui</button> <button class="btn tiny danger" data-act="tolakPegawai" data-id="${r.id}">Tolak</button>` : ''} ${r.authUserId ? `<button class="btn tiny ghost" data-act="resetPasswordPegawai" data-id="${r.id}">Reset Password</button>` : ''} <button class="btn tiny ghost" data-act="riwayat" data-id="${r.id}">Riwayat</button>`,
+    extra: r => '<button class="btn tiny" data-act="detailPegawai" data-id="' + r.id + '">Detail</button>',
     kolom: [
-      { h: 'Nama', f: r => esc(r.nama) },
-      { h: 'ID', f: r => esc(r.idPegawai) },
-      { h: 'Jabatan', f: r => esc(r.jabatan) },
-      { h: 'Email', f: r => esc(r.email || '-') },
-      { h: 'Username', f: r => esc(r.username || '-') },
-      { h: 'WhatsApp', f: r => esc(r.telepon || '-') },
-      { h: 'Status verifikasi', f: r => esc(r.statusVerifikasi || 'menunggu') },
-      { h: 'Status kerja', f: r => esc(r.statusKerja) },
-      { h: 'Akses', f: r => (r.akses || []).map(a => `<span class="tag">${AKSES[a]}</span>`).join(' ') || '<span class="muted">Laporan harian saja</span>' }
+      { h: 'Nama Pegawai', f: r => '<strong>' + esc(r.nama) + '</strong><div class="muted">' + esc(r.jabatan || '-') + '</div>' },
+      { h: 'ID Pegawai', f: r => esc(r.idPegawai) },
+      { h: 'Status', f: r => r.statusVerifikasi === 'disetujui' ? '<span class="tag green">Aktif</span>' : r.statusVerifikasi === 'ditolak' ? '<span class="tag red">Ditolak</span>' : '<span class="tag amber">Menunggu</span>' },
+      { h: 'Akses Sistem', f: r => (r.akses || []).length ? r.akses.map(a => '<span class="tag">' + esc(AKSES[a] || a) + '</span>').join(' ') : '<span class="muted">Laporan harian</span>' }
     ],
     fields: isEdit => [
       { name: 'nama', label: 'Nama pegawai', req: true },
@@ -841,6 +836,25 @@ async function prosesVerifikasiPegawai(id, status) {
 
 /* ===== Router & render ===== */
 
+function detailPegawai(id) {
+  const p = DB.get('pegawai', id);
+  if (!p) return alert('Data pegawai tidak ditemukan.');
+  const akses = (p.akses || []).map(a => '<span class="tag green">' + esc(AKSES[a] || a) + '</span>').join(' ') || '<span class="muted">Hanya laporan harian</span>';
+  const status = p.statusVerifikasi === 'disetujui' ? '<span class="tag green">Disetujui</span>' : p.statusVerifikasi === 'ditolak' ? '<span class="tag red">Ditolak</span>' : '<span class="tag amber">Menunggu</span>';
+  openInfo('Detail Pegawai', '<div class="detail-profile"><div class="detail-avatar">👤</div><h2>' + esc(p.nama) + '</h2><p>' + esc(p.jabatan || '-') + '</p>' + status +
+    '<div class="detail-grid">' +
+    '<div><small>ID Pegawai</small><strong>' + esc(p.idPegawai || '-') + '</strong></div>' +
+    '<div><small>Username</small><strong>' + esc(p.username || '-') + '</strong></div>' +
+    '<div><small>Email</small><strong>' + esc(p.email || '-') + '</strong></div>' +
+    '<div><small>WhatsApp</small><strong>' + esc(p.telepon || '-') + '</strong></div>' +
+    '<div><small>Status Kerja</small><strong>' + esc(p.statusKerja || '-') + '</strong></div>' +
+    '<div><small>Alamat</small><strong>' + esc(p.alamat || '-') + '</strong></div></div>' +
+    '<h4>Akses Sistem</h4><div class="detail-access">' + akses + '</div>' +
+    '<div class="row-actions detail-actions">' +
+    (p.statusVerifikasi === 'menunggu' ? '<button class="btn" data-act="setujuiPegawai" data-id="' + p.id + '">Setujui</button><button class="btn danger" data-act="tolakPegawai" data-id="' + p.id + '">Tolak</button>' : '') +
+    (p.authUserId ? '<button class="btn ghost" data-act="resetPasswordPegawai" data-id="' + p.id + '">Reset Password</button>' : '') +
+    '<button class="btn ghost" data-act="riwayat" data-id="' + p.id + '">Riwayat</button><button class="btn ghost" data-act="edit" data-tbl="pegawai" data-id="' + p.id + '">Ubah Data</button></div></div>');
+}
 function pageProfil() {
   const u = me();
   const photo = u.avatarUrl ? '<img src="' + esc(u.avatarUrl) + '" class="thumb-lg" alt="Foto profil">' : '<p class="muted">Belum ada foto profil.</p>';
@@ -863,8 +877,28 @@ function pageProfil() {
           const file = $('#profil-foto').files[0];
           let avatar = u.avatarUrl || '';
           if (file) {
-            if (!file.type.startsWith('image/') || file.size > 350 * 1024) throw new Error('Pilih foto maksimal 350 KB.');
-            avatar = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = reject; fr.readAsDataURL(file); });
+            if (!['image/jpeg','image/png','image/webp'].includes(file.type)) throw new Error('Foto harus JPG, PNG, atau WebP.');
+            if (file.size > 2 * 1024 * 1024) throw new Error('Ukuran foto maksimal 2 MB.');
+            const blob = await new Promise((resolve, reject) => {
+              const fr = new FileReader();
+              fr.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  const scale = Math.min(1, 640 / Math.max(img.width, img.height));
+                  canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+                  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                  canvas.toBlob(b => b ? resolve(b) : reject(new Error('Foto gagal diproses.')), 'image/jpeg', 0.82);
+                };
+                img.onerror = () => reject(new Error('File foto tidak valid.')); img.src = fr.result;
+              };
+              fr.onerror = () => reject(new Error('Foto gagal dibaca.')); fr.readAsDataURL(file);
+            });
+            const path = u.authId + '/avatar.jpg';
+            const { error: uploadError } = await supabaseClient.storage.from('profile-photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+            if (uploadError) throw uploadError;
+            const { data: publicData } = supabaseClient.storage.from('profile-photos').getPublicUrl(path);
+            avatar = publicData.publicUrl + '?v=' + Date.now();
           }
           const { error } = await supabaseClient.from('profiles').update({ nama, avatar_url: avatar }).eq('id', u.authId);
           if (error) throw error;
@@ -1019,6 +1053,7 @@ function aksiKlik(e) {
       DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); render(); }).catch(err => alert(err.message));
       return;
     }
+    case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
     case 'resetPasswordPegawai': return resetPasswordPegawai(id);
     case 'salinPassword': {
