@@ -49,8 +49,14 @@ const DB = {
     return row;
   },
   async remove(tabel, id) {
-    const { error } = await supabaseClient.from(TABLES[tabel]).delete().eq('id', id);
+    const { error, count } = await supabaseClient
+      .from(TABLES[tabel])
+      .delete({ count: 'exact' })
+      .eq('id', id);
     if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
+    if (count === 0) {
+      throw new Error(`Data ${tabel} tidak terhapus. Periksa izin DELETE pada kebijakan RLS Supabase atau pastikan data masih ada.`);
+    }
     this.d[tabel] = this.d[tabel].filter(x => String(x.id) !== String(id));
   },
   async simpan() { return true; },
