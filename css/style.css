@@ -423,3 +423,23 @@ tr:last-child td { border-bottom: none; }
   .card, .table-wrap { border: none; }
   th { background: #eee !important; }
 }
+
+
+/* ===== Detail pegawai & profil akun ===== */
+.detail-profile { text-align: center; }
+.detail-avatar { width: 76px; height: 76px; margin: 0 auto 10px; border-radius: 50%; display: grid; place-items: center; background: var(--hijau-muda); font-size: 34px; }
+.detail-profile > h2 { margin-bottom: 2px; }
+.detail-profile > p { margin: 0 0 10px; color: var(--abu); }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin: 20px 0; text-align: left; }
+.detail-grid > div { padding: 12px; background: #f7faf7; border: 1px solid var(--garis); border-radius: 9px; min-width: 0; }
+.detail-grid small { display: block; color: var(--abu); margin-bottom: 4px; }
+.detail-grid strong { display: block; overflow-wrap: anywhere; font-size: 14px; }
+.detail-access { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0 20px; }
+.detail-actions { justify-content: center; }
+.profile-photo { display: flex; justify-content: center; margin: 4px 0 18px; }
+.profile-photo .thumb-lg { width: 116px; height: 116px; border-radius: 50%; object-fit: cover; border: 4px solid var(--hijau-muda); }
+@media (max-width: 520px) {
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-actions { flex-direction: column; }
+  .detail-actions .btn { width: 100%; }
+}
