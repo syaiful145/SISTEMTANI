@@ -48,7 +48,7 @@ const DB = {
     if (i >= 0) this.d[tabel][i] = row; else this.d[tabel].push(row);
     return row;
   },
-  async remove(tabel, id) {
+  async remove(tabel, id, files = []) {
     if (!TABLES[tabel]) throw new Error('Jenis data tidak dikenal.');
     const user = typeof me === 'function' ? me() : null;
     if (tabel === 'pegawai' && user?.adminLevel !== 'utama') {
@@ -59,7 +59,7 @@ const DB = {
     // riwayat pegawai, dan penyesuaian stok diproses di server.
     if (user?.tipe === 'admin' && user?.adminLevel === 'utama') {
       const { data, error } = await supabaseClient.functions.invoke('admin-force-delete', {
-        body: { table: TABLES[tabel], id: Number(id) }
+        body: { table: TABLES[tabel], id: Number(id), files }
       });
       if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
       if (!data?.success) throw new Error(data?.error || `Gagal menghapus ${tabel}.`);
