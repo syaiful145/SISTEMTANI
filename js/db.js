@@ -5,7 +5,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TABLES = {
   lahan: 'lahan', tanaman: 'tanaman', penanaman: 'penanaman', panen: 'panen', barang: 'barang',
-  transaksi: 'transaksi', pegawai: 'pegawai', laporan: 'laporan', absensi: 'absensi', pengaturanAbsensi: 'pengaturan_absensi', izin: 'izin_pegawai', log: 'log_aktivitas'
+  transaksi: 'transaksi', pegawai: 'pegawai', laporan: 'laporan', laporanDraft: 'laporan_draft', absensi: 'absensi', pengaturanAbsensi: 'pengaturan_absensi', izin: 'izin_pegawai', log: 'log_aktivitas'
 };
 const DB = {
   d: Object.fromEntries(Object.keys(TABLES).map(k => [k, []])),
@@ -25,7 +25,7 @@ const DB = {
   },
   async init(isAdmin = false) {
     this.d = Object.fromEntries(Object.keys(TABLES).map(k => [k, []]));
-    const names = Object.keys(TABLES).filter(k => isAdmin || k !== 'log');
+    const names = Object.keys(TABLES).filter(k => (isAdmin || k !== 'log') && (!isAdmin || k !== 'laporanDraft'));
     const results = await Promise.all(names.map(async key => {
       const { data, error } = await supabaseClient.from(TABLES[key]).select('*');
       if (error) throw new Error(`Gagal memuat ${TABLES[key]}: ${error.message}`);
