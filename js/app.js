@@ -427,18 +427,45 @@ function stopLaporCamera() {
   LAPOR_CAMERA_STREAM = null;
 }
 async function namaLokasiGPS(lat, lon) {
-  try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1`;
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error('Layanan alamat tidak tersedia');
-    const data = await response.json();
-    const a = data.address || {};
-    const bagian = [a.road || a.pedestrian || a.path, a.suburb || a.neighbourhood || a.village || a.hamlet, a.city || a.town || a.county || a.state_district, a.state].filter(Boolean);
-    return bagian.length ? [...new Set(bagian)].join(', ') : (data.display_name || 'Nama lokasi tidak ditemukan');
-  } catch (e) {
-    console.warn('Reverse geocoding gagal:', e);
-    return 'Nama lokasi tidak tersedia (koordinat GPS tetap tersimpan)';
+  const providers = [
+    async () => {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1`;
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('OpenStreetMap tidak tersedia');
+      const data = await response.json();
+      const a = data.address || {};
+      const jalan = a.road || a.pedestrian || a.residential || a.footway || a.path || a.highway;
+      const nomor = a.house_number || a.house_name;
+      const rt = a.quarter || a.hamlet;
+      const kelurahan = a.neighbourhood || a.suburb || a.village || a.locality || a.city_district;
+      const kecamatan = a.municipality || a.county || a.district || a.city;
+      const kota = a.city || a.town || a.regency || a.city_district || a.county;
+      const provinsi = a.state;
+      const parts = [
+        jalan ? (nomor ? `${jalan} No. ${nomor}` : jalan) : null,
+        rt ? `Wilayah: ${rt}` : null,
+        kelurahan ? `Kel. ${kelurahan}` : null,
+        kecamatan ? `Kec. ${kecamatan}` : null,
+        kota,
+        provinsi
+      ].filter(Boolean);
+      return parts.length ? [...new Set(parts)].join(', ') : (data.display_name || null);
+    },
+    async () => {
+      const url = `https://geocode.maps.co/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('Layanan alamat cadangan tidak tersedia');
+      const data = await response.json();
+      return data.display_name || null;
+    }
+  ];
+  for (const provider of providers) {
+    try {
+      const result = await provider();
+      if (result) return result;
+    } catch (e) { console.warn('Pencarian alamat gagal:', e); }
   }
+  return 'Alamat rinci tidak tersedia; gunakan titik GPS pada peta';
 }
 function waktuLokal(d) {
   return d.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'medium' });
