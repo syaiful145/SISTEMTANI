@@ -1025,7 +1025,15 @@ async function daftarPegawai(e) {
   const email = $('#r-email').value.trim();
   const username = $('#r-username').value.trim().toLowerCase();
   const jabatan = $('#r-jabatan').value.trim();
-  const telepon = $('#r-telepon').value.trim();
+  // Samakan format nomor agar 08xxx dan +62xxx dianggap nomor yang sama.
+  let telepon = $('#r-telepon').value.replace(/[^0-9]/g, '');
+  if (telepon.startsWith('0')) telepon = '62' + telepon.slice(1);
+  else if (telepon.startsWith('8')) telepon = '62' + telepon;
+  if (!/^62[0-9]{8,13}$/.test(telepon)) {
+    msg.textContent = 'Nomor WhatsApp tidak valid. Gunakan nomor Indonesia yang aktif.';
+    msg.classList.add('error');
+    return;
+  }
   const alamat = $('#r-alamat').value.trim();
   const password = $('#r-pass').value;
   const ulangi = $('#r-pass2').value;
@@ -1058,7 +1066,14 @@ async function daftarPegawai(e) {
       ? 'Pendaftaran berhasil. Akun menunggu persetujuan admin sebelum dapat digunakan.'
       : 'Pendaftaran dibuat, tetapi konfirmasi email Supabase masih aktif. Admin perlu menonaktifkan konfirmasi email agar alur tanpa OTP dapat digunakan.';
   } catch (err) {
-    msg.textContent = err.message || 'Pendaftaran gagal. Periksa data dan koneksi, lalu coba lagi.';
+    const detail = String(err.message || '');
+    if (/already registered|already exists|duplicate key|unique constraint|23505/i.test(detail)) {
+      msg.textContent = /email|user/i.test(detail)
+        ? 'Email tersebut sudah terdaftar. Gunakan email lain.'
+        : 'ID pegawai atau nomor WhatsApp tersebut sudah digunakan. Periksa kembali datanya.';
+    } else {
+      msg.textContent = detail || 'Pendaftaran gagal. Periksa data dan koneksi, lalu coba lagi.';
+    }
     msg.classList.add('error');
   } finally {
     submit.disabled = false;
