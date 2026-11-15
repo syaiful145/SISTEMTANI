@@ -482,7 +482,7 @@ function openLapor() {
       <label class="field"><span>Tanggal kegiatan *</span><input name="tanggal" type="date" value="${hariIni()}" required></label>
       <label class="field"><span>Jenis kegiatan *</span><select name="jenis" required><option value="">Pilih jenis kegiatan</option>${JENIS_KEGIATAN.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label>
       <label class="field full"><span>Lokasi lahan / blok *</span><input name="lokasi" required placeholder="Contoh: Blok A, petak 2"></label>
-      <label class="field full"><span>Nama tanaman *</span><select name="tanamanNama" required><option value="">Pilih tanaman</option>${DB.all('tanaman').map(t => '<option value="'+esc(t.nama)+'">'+esc(t.nama)+'</option>').join('')}</select></label>
+      <label class="field full"><span>Nama tanaman *</span><input name="tanamanNama" required maxlength="120" placeholder="Masukkan nama tanaman"></label>
       <label class="field"><span>Luas dikerjakan (m²)</span><input name="luasM2" type="number" min="0" step="0.01" placeholder="Contoh: 25"></label>
       <label class="field"><span>Jumlah ditanam (batang/bibit)</span><input name="jumlahDitanam" type="number" min="0" step="1" placeholder="Contoh: 100"></label>
       <label class="field"><span>Umur tanaman saat ini (hari)</span><input name="umurTanamanHari" type="number" min="0" step="1" placeholder="Contoh: 14"></label>
