@@ -1040,7 +1040,7 @@ async function detailLaporan(id) {
       <p><strong>Jumlah ditanam</strong><br>${l.jumlahDitanam==null?'-':esc(l.jumlahDitanam)}</p>
       <p><strong>Umur tanaman</strong><br>${l.umurTanamanHari==null?'-':esc(l.umurTanamanHari)+' hari'}</p>
       <p><strong>Status tanaman</strong><br>${esc(l.statusTanaman||'-')}</p>
-      <p><strong>Bahan dipakai</strong><br>${l.benihDipakai==null?'-':esc(l.benihDipakai)+' '+esc((DB.get('barang',l.benihBarangId)||{}).satuan||'')+' · '+esc((DB.get('barang',l.benihBarangId)||{}).nama||'')}</p>\n      <p><strong>Hasil panen</strong><br>${l.panenKg==null?'-':esc(l.panenKg)+' kg'}</p>\n      <p><strong>Kualitas panen</strong><br>${esc(l.kualitasPanen||'-')}</p>
+      <p><strong>Bibit dipakai</strong><br>${l.benihDipakai==null?'-':esc(l.benihDipakai)+' '+esc((DB.get('barang',l.benihBarangId)||{}).satuan||'')+' · '+esc((DB.get('barang',l.benihBarangId)||{}).nama||'')}</p>\n      <p><strong>Pupuk dipakai</strong><br>${l.pupukDipakai==null?'-':esc(l.pupukDipakai)+' '+esc((DB.get('barang',l.pupukBarangId)||{}).satuan||'')+' · '+esc((DB.get('barang',l.pupukBarangId)||{}).nama||'')}</p>\n      <p><strong>Hasil panen</strong><br>${l.panenKg==null?'-':esc(l.panenKg)+' kg'}</p>\n      <p><strong>Kualitas panen</strong><br>${esc(l.kualitasPanen||'-')}</p>
       ${lokasiFoto}
     </div>
     <h4>Foto Bukti Kegiatan</h4>${fotoHtml}
