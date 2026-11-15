@@ -38,7 +38,7 @@
       '<section class="stats-grid"><div class="stat-card"><span>Hadir</span><strong>'+attended+'</strong></div><div class="stat-card"><span>Terlambat</span><strong>'+late+'</strong></div><div class="stat-card"><span>Izin</span><strong>'+approved.length+'</strong></div><div class="stat-card"><span>Tidak hadir</span><strong>'+absent+'</strong></div></section>'+
       '<h3>Rekap Hari Ini</h3>'+tabel(['Pegawai','Status','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],staff.map(p=>{const r=todayRows.find(x=>String(x.pegawaiId)===String(p.id));const st=r?statusA(r,sched):approvedA(p.id,today)?'Izin':'Tidak hadir';return [escA(p.nama),tagA(st),timeA(r&&r.masukAt),timeA(r&&r.pulangAt),escA(r&&r.masukAlamat||'-'),escA(r&&r.pulangAlamat||'-')];}),'Belum ada pegawai.')+
       '<h3>Pengajuan Izin Menunggu</h3>'+tabel(['Pegawai','Tanggal','Jenis','Alasan','Aksi'],pending.map(x=>[escA(namaPegawai(x.pegawaiId)),dateA(x.tanggalMulai)+' – '+dateA(x.tanggalSelesai),escA(x.jenis),escA(x.alasan),'<button class="btn tiny" data-act="att-review" data-id="'+x.id+'">Periksa</button>']),'Tidak ada pengajuan menunggu.')+
-      '<h3>Riwayat Absensi</h3>'+tabel(['Tanggal','Pegawai','Masuk','Pulang','Lokasi masuk','Lokasi pulang'],DB.all('absensi').slice().sort((a,b)=>b.tanggal.localeCompare(a.tanggal)).map(x=>[dateA(x.tanggal),escA(namaPegawai(x.pegawaiId)),timeA(x.masukAt),timeA(x.pulangAt),escA(x.masukAlamat||'-'),escA(x.pulangAlamat||'-')]),'Belum ada data.')};
+      '<h3>Riwayat Absensi</h3>'+tabel(['Tanggal','Pegawai','Masuk','Pulang','Lokasi masuk','Lokasi pulang','Foto'],DB.all('absensi').slice().sort((a,b)=>b.tanggal.localeCompare(a.tanggal)).map(x=>[dateA(x.tanggal),escA(namaPegawai(x.pegawaiId)),timeA(x.masukAt),timeA(x.pulangAt),escA(x.masukAlamat||'-'),escA(x.pulangAlamat||'-'),'<button class="btn tiny" data-act="att-detail" data-id="'+x.id+'">Lihat Foto</button>']),'Belum ada data.')};
   }
   async function scheduleEditA(){
     if(!isAdmin())return;
@@ -70,6 +70,13 @@
     if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||! /^\d{4}-\d{2}-\d{2}$/.test(end)||end<start||!['izin','sakit'].includes(kind.toLowerCase()))return alert('Tanggal atau jenis izin tidak valid.');
     const input=document.createElement('input');input.type='file';input.accept='image/*';input.capture='environment';input.onchange=async()=>{const file=input.files&&input.files[0];if(!file)return;if(file.size>5*1024*1024)return alert('Foto maksimal 5 MB.');const path=u.authId+'/izin-'+Date.now()+'.jpg';try{const up=await supabaseClient.storage.from('izin-bukti').upload(path,file,{contentType:file.type||'image/jpeg'});if(up.error)throw up.error;try{await DB.add('izin',{pegawaiId:u.id,authUserId:u.authId,tanggalMulai:start,tanggalSelesai:end,jenis:kind[0].toUpperCase()+kind.slice(1).toLowerCase(),alasan:reason,fotoPath:path,status:'menunggu'});}catch(e){await supabaseClient.storage.from('izin-bukti').remove([path]);throw e;}await refreshA();}catch(e){alert('Pengajuan izin gagal: '+e.message);}};input.click();
   }
+  async function detailAttendanceA(id){
+    const x=DB.get('absensi',id);if(!x)return;
+    const paths=[['Foto Masuk',x.masukFotoPath],['Foto Pulang',x.pulangFotoPath]];
+    const blocks=await Promise.all(paths.map(async pair=>{if(!pair[1])return '<p><b>'+pair[0]+':</b> Belum ada foto.</p>';const r=await supabaseClient.storage.from('absensi-bukti').createSignedUrl(pair[1],300);return '<h4>'+pair[0]+'</h4>'+(r.data&&r.data.signedUrl?'<img src="'+escA(r.data.signedUrl)+'" alt="'+pair[0]+'" style="width:100%;max-height:360px;object-fit:contain">':'<p>Foto gagal dimuat.</p>');}));
+    openInfo('Bukti Foto Absensi','<p><b>Pegawai:</b> '+escA(namaPegawai(x.pegawaiId))+'</p><p><b>Tanggal:</b> '+dateA(x.tanggal)+'</p><p><b>Waktu masuk:</b> '+timeA(x.masukAt)+'</p><p><b>Lokasi masuk:</b> '+escA(x.masukAlamat||'-')+'</p><p><b>Waktu pulang:</b> '+timeA(x.pulangAt)+'</p><p><b>Lokasi pulang:</b> '+escA(x.pulangAlamat||'-')+'</p>'+blocks.join('')+'<button class="btn ghost" data-tutup>Tutup</button>');
+    $('#modal [data-tutup]').onclick=tutupModal;
+  }
   async function reviewA(id){
     if(!isAdmin())return;const x=DB.get('izin',id);if(!x)return;
     const result=await supabaseClient.storage.from('izin-bukti').createSignedUrl(x.fotoPath,300);
@@ -90,6 +97,7 @@
       case 'att-photo-out':e.preventDefault();photoA('pulang');break;
       case 'att-leave':e.preventDefault();leaveA();break;
       case 'att-review':e.preventDefault();reviewA(id);break;
+      case 'att-detail':e.preventDefault();detailAttendanceA(id);break;
     }
   });
 })();
