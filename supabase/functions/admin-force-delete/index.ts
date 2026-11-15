@@ -47,16 +47,22 @@ Deno.serve(async (req) => {
       .map((f: any) => ({ bucket: f.bucket, path: f.path }));
 
     // Saat menghapus pegawai, kumpulkan juga seluruh foto bukti yang terkait.
+    if (table === "pegawai" || table === "lahan") {
+      const reportsQuery = adminClient.from("laporan").select("foto_path").eq(table === "pegawai" ? "pegawai_id" : "lahan_id", id);
+      const reports = await reportsQuery;
+      if (reports.error) throw reports.error;
+      for (const row of reports.data || []) if (row.foto_path) files.push({ bucket: "laporan-bukti", path: row.foto_path });
+    }
     if (table === "pegawai") {
-      const [reports, attendance, leaves] = await Promise.all([
-        adminClient.from("laporan").select("foto_path").eq("pegawai_id", id),
+      const [attendance, leaves, drafts] = await Promise.all([
         adminClient.from("absensi").select("masuk_foto_path,pulang_foto_path").eq("pegawai_id", id),
         adminClient.from("izin_pegawai").select("foto_path").eq("pegawai_id", id),
+        adminClient.from("laporan_draft").select("data").eq("pegawai_id", id),
       ]);
-      if (reports.error) throw reports.error;
       if (attendance.error) throw attendance.error;
       if (leaves.error) throw leaves.error;
-      for (const row of reports.data || []) if (row.foto_path) files.push({ bucket: "laporan-bukti", path: row.foto_path });
+      if (drafts.error) throw drafts.error;
+      for (const row of drafts.data || []) if (row.data?.fotoPath) files.push({ bucket: "laporan-bukti", path: row.data.fotoPath });
       for (const row of attendance.data || []) {
         if (row.masuk_foto_path) files.push({ bucket: "absensi-bukti", path: row.masuk_foto_path });
         if (row.pulang_foto_path) files.push({ bucket: "absensi-bukti", path: row.pulang_foto_path });
