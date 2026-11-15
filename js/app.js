@@ -42,6 +42,8 @@ let ACTIVE_USER = null;
 let PASSWORD_CHANGE_REQUIRED = false;
 
 function me() { return ACTIVE_USER; }
+// Normalisasi level admin agar nilai dari profil tetap konsisten saat dipakai UI.
+function isAdminUtama() { return isAdmin() && String(me()?.adminLevel || '').trim().toLowerCase() === 'utama'; }
 
 async function muatPenggunaAuth(user) {
   if (!user) { ACTIVE_USER = null; return null; }
@@ -50,7 +52,7 @@ async function muatPenggunaAuth(user) {
   if (profilError) throw profilError;
   if (!profil) throw new Error('Profil akun tidak ditemukan. Hubungi administrator.');
   if (profil.role === 'admin') {
-    ACTIVE_USER = { tipe: 'admin', key: 'admin', nama: profil.nama || 'Administrator', akses: Object.keys(AKSES), authId: user.id, adminLevel: profil.admin_level, avatarUrl: profil.avatar_url || '' };
+    ACTIVE_USER = { tipe: 'admin', key: 'admin', nama: profil.nama || 'Administrator', akses: Object.keys(AKSES), authId: user.id, adminLevel: String(profil.admin_level || '').trim().toLowerCase(), avatarUrl: profil.avatar_url || '' };
     return ACTIVE_USER;
   }
   const { data: pegawai, error: pegawaiError } = await supabaseClient
@@ -270,7 +272,7 @@ function openCrud(tbl, id) {
 function cfgLahan() {
   return {
     judul: 'Data Lahan',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdminUtama(),
     labelTambah: '+ Tambah Lahan',
     nama: r => r.nama,
     extra: r => '<button class="btn tiny ghost" data-act="detailLahan" data-id="'+r.id+'">Detail</button>',
@@ -319,7 +321,7 @@ function detailLahan(id) {
 function cfgTanaman() {
   return {
     judul: 'Data Tanaman',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdminUtama(),
     nama: r => r.nama,
     kolom: [
       { h: 'Nama', f: r => esc(r.nama) },
@@ -348,7 +350,7 @@ function cfgTanaman() {
 function cfgPenanaman() {
   return {
     judul: 'Data Penanaman',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdminUtama(),
     nama: r => namaTanaman(r.tanamanId),
     kolom: [
       { h: 'Tanaman', f: r => esc(namaTanaman(r.tanamanId)) },
@@ -372,7 +374,7 @@ function cfgPenanaman() {
 function cfgPanen() {
   return {
     judul: 'Data Panen',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdminUtama(),
     nama: r => `Panen ${rp(r.kg)} kg`,
     kolom: [
       { h: 'Tanggal', f: r => tgl(r.tanggal) },
@@ -409,7 +411,7 @@ function detailBarang(id) {
 function cfgBarang() {
   return {
     judul: 'Data Barang',
-    tambah: isAdmin(), ubah: isAdmin(), hapus: me()?.adminLevel === 'utama',
+    tambah: isAdmin(), ubah: isAdmin(), hapus: isAdminUtama(),
     labelTambah: '+ Tambah Barang',
     nama: r => r.nama,
     extra: r => '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+r.id+'">Detail</button>',
@@ -437,7 +439,7 @@ function cfgBarang() {
 function cfgPegawai() {
   return {
     judul: 'Data Pegawai',
-    tambah: false, ubah: true, hapus: me()?.adminLevel === 'utama',
+    tambah: false, ubah: true, hapus: isAdminUtama(),
     nama: r => r.nama,
     extra: r => '<button class="btn tiny" data-act="detailPegawai" data-id="' + r.id + '">Detail</button>',
     kolom: [
@@ -931,7 +933,7 @@ function pageAktivitas() {
   };
 }
 async function hapusLaporanAdmin(id) {
-  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang boleh menghapus laporan.');
+  if (!isAdminUtama()) return alert('Hanya Admin Utama yang boleh menghapus laporan.');
   const row=DB.get('laporan',id); if(!row)return;
   if(!confirm('Hapus laporan ini beserta foto bukti yang tersimpan? Tindakan tidak dapat dibatalkan.'))return;
   try {
@@ -941,7 +943,7 @@ async function hapusLaporanAdmin(id) {
   } catch(err){alert('Gagal menghapus laporan: '+err.message);}
 }
 async function hapusRiwayatAdmin(tbl,id) {
-  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang boleh menghapus riwayat.');
+  if (!isAdminUtama()) return alert('Hanya Admin Utama yang boleh menghapus riwayat.');
   const row=DB.get(tbl,id); if(!row)return;
   if(!confirm('Hapus riwayat ini beserta foto buktinya? Tindakan tidak dapat dibatalkan.'))return;
   const files=[];
@@ -1522,7 +1524,7 @@ function pageProfil() {
 }
 
 async function kelolaAdminKedua(action, adminId, nama) {
-  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang dapat mengelola Admin Kedua.');
+  if (!isAdminUtama()) return alert('Hanya Admin Utama yang dapat mengelola Admin Kedua.');
   if (action === 'delete' && !confirm('Hapus akun Admin Kedua ' + nama + '? Akun tersebut tidak dapat login lagi.')) return;
   let temporaryPassword = '';
   if (action === 'reset') {
@@ -1577,7 +1579,7 @@ async function muatPermohonanAdmin() {
 }
 
 async function prosesPermohonanAdmin(applicationId, action) {
-  if (me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang dapat memverifikasi permohonan.');
+  if (!isAdminUtama()) return alert('Hanya Admin Utama yang dapat memverifikasi permohonan.');
   const label = action === 'approve' ? 'menyetujui' : 'menolak';
   if (!confirm('Yakin ' + label + ' permohonan Admin Kedua ini?')) return;
   try {
@@ -1604,7 +1606,7 @@ function pageAdmins() {
       const { data, error } = await supabaseClient.from('profiles').select('id,nama,username,role,admin_level').eq('role', 'admin').order('nama');
       if (error) throw error;
       const admins = data || [];
-      const utama = me()?.adminLevel === 'utama';
+      const utama = isAdminUtama();
       const rows = admins.map(x => [
         '<strong>' + esc(x.nama) + '</strong>',
         esc(x.username || '-'),
@@ -1738,7 +1740,7 @@ function aksiKlik(e) {
     case 'edit': return openCrud(tbl, id);
     case 'hapus': {
       const cfg = CFG[tbl], row = DB.get(tbl, id);
-      if (tbl === 'pegawai' && me()?.adminLevel !== 'utama') return alert('Hanya Admin Utama yang boleh menghapus data karyawan.');
+      if (tbl === 'pegawai' && !isAdminUtama()) return alert('Hanya Admin Utama yang boleh menghapus data karyawan.');
       if (!isAdmin()) return alert('Hanya administrator yang boleh menghapus data.');
       if (!row || !confirm('Hapus data ini? Tindakan ini tidak bisa dibatalkan.')) return;
       DB.remove(tbl, id).then(async () => { await catat(`Hapus ${cfg.judul}`, cfg.nama(row)); await DB.init(true); render(); }).catch(err => alert(err.message));
