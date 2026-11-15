@@ -773,10 +773,7 @@ async function resetPasswordPegawai(id) {
   if (!pegawai) return alert('Data pegawai tidak ditemukan.');
   if (!pegawai.authUserId) return alert('Akun login pegawai ini belum terhubung.');
 
-  if (!confirm(`Reset password akun ${pegawai.nama}? WhatsApp akan dibuka otomatis setelah reset berhasil.`)) return;
-
-  // Buka tab kosong selagi masih dalam klik Admin agar tidak diblokir browser.
-  const tabWhatsApp = window.open('about:blank', '_blank');
+  if (!confirm(\`Reset password akun \${pegawai.nama}?\`)) return;
 
   const temporaryPassword = buatPasswordSementara();
 
@@ -796,32 +793,24 @@ async function resetPasswordPegawai(id) {
     if (!data?.success) throw new Error(data?.error || 'Function tidak mengonfirmasi reset password.');
 
     const nomor = nomorWhatsApp(pegawai.telepon);
-    const pesanWA = `Halo ${pegawai.nama}, password sementara akun SIMTANI Anda: ${temporaryPassword}. Silakan login menggunakan email terdaftar, lalu segera buat password baru setelah berhasil masuk.`;
+    const pesanWA = \`Halo \${pegawai.nama}, password sementara akun SIMTANI Anda: \${temporaryPassword}. Silakan login menggunakan email terdaftar, lalu segera buat password baru setelah berhasil masuk.\`;
     const tautanWA = nomor
-      ? `https://wa.me/${nomor}?text=${encodeURIComponent(pesanWA)}`
+      ? \`https://wa.me/\${nomor}?text=\${encodeURIComponent(pesanWA)}\`
       : '';
 
-    if (tautanWA && tabWhatsApp && !tabWhatsApp.closed) {
-      tabWhatsApp.location.href = tautanWA;
-    } else if (tabWhatsApp && !tabWhatsApp.closed) {
-      tabWhatsApp.close();
-    }
-
-    openInfo(`Password sementara · ${pegawai.nama}`, `
+    openInfo(\`Password sementara · \${pegawai.nama}\`, \`
       <p>Password akun pegawai berhasil direset.</p>
       <p><strong>Password sementara:</strong></p>
-      <p><code>${esc(temporaryPassword)}</code></p>
-      <button class="btn" data-act="salinPassword" data-password="${esc(temporaryPassword)}">Salin password</button>
-      ${tautanWA
-        ? `<p><a class="btn ghost" href="${esc(tautanWA)}" target="_blank" rel="noopener noreferrer">Buka WhatsApp dengan pesan</a></p>
-           <p class="muted">Jika teks tidak muncul di WhatsApp, salin pesan berikut dan tempel ke chat pegawai:</p>
-           <p><textarea readonly rows="4" style="width:100%">${esc(pesanWA)}</textarea></p>
-
+      <p><code>\${esc(temporaryPassword)}</code></p>
+      <button class="btn" data-act="salinPassword" data-password="\${esc(temporaryPassword)}">Salin password</button>
+      \${tautanWA
+        ? \`<p><a class="btn ghost" href="\${esc(tautanWA)}" target="_blank" rel="noopener noreferrer">Buka WhatsApp dengan pesan</a></p>
+           <p class="muted">Jika teks tidak muncul, salin pesan berikut ke chat pegawai:</p>
+           <p><textarea readonly rows="4" style="width:100%">\${esc(pesanWA)}</textarea></p>\`
         : '<p class="muted">Nomor WhatsApp belum valid. Sampaikan password sementara secara langsung melalui cara yang aman.</p>'}
       <p class="muted">Pegawai harus mengganti password setelah login.</p>
-    `);
+    \`);
   } catch (err) {
-    if (tabWhatsApp && !tabWhatsApp.closed) tabWhatsApp.close();
     alert('Gagal mereset password: ' + (err.message || 'Kesalahan tidak diketahui.'));
   }
 }
