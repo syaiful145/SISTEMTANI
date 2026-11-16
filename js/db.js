@@ -64,7 +64,19 @@ const DB = {
       const { data, error } = await supabaseClient.functions.invoke('admin-force-delete', {
         body: { table: TABLES[tabel], id: Number(id), files }
       });
-      if (error) throw new Error(`Gagal menghapus ${tabel}: ${error.message}`);
+      if (error) {
+        // FunctionsHttpError menyimpan respons Edge Function di error.context.
+        // Baca pesan server agar penyebab kegagalan tidak tertutup pesan HTTP umum.
+        let detail = error.message || 'Permintaan penghapusan gagal.';
+        try {
+          const response = error.context;
+          if (response && typeof response.clone === 'function') {
+            const payload = await response.clone().json();
+            if (payload?.error) detail = payload.error;
+          }
+        } catch (_) { /* Gunakan pesan umum bila respons bukan JSON. */ }
+        throw new Error(`Gagal menghapus ${tabel}: ${detail}`);
+      }
       if (!data?.success) throw new Error(data?.error || `Gagal menghapus ${tabel}.`);
     } else {
       const { data, error } = await supabaseClient
