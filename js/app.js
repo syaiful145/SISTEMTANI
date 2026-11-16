@@ -1345,7 +1345,7 @@ function pageNotifikasi() {
 }
 
 /* ----- Laporan ----- */
-const LAP_DEFAULT = { jenis: 'penanaman', dari: '', sampai: '', bulan: '', tahun: '', jenisTanaman: '', pegawaiId: '' };
+const LAP_DEFAULT = { jenis: 'penanaman', dari: '', sampai: '', jenisTanaman: '', pegawaiId: '' };
 let LAP = { ...LAP_DEFAULT };
 let LAP_DATA = null;
 
@@ -1353,8 +1353,6 @@ function cocokTgl(tg) {
   if (!tg) return true;
   if (LAP.dari && tg < LAP.dari) return false;
   if (LAP.sampai && tg > LAP.sampai) return false;
-  if (LAP.bulan && !tg.startsWith(LAP.bulan)) return false;
-  if (LAP.tahun && !tg.startsWith(LAP.tahun)) return false;
   return true;
 }
 const cocokJenis = tanamanId => !LAP.jenisTanaman || jenisTanaman(tanamanId) === LAP.jenisTanaman;
@@ -1445,7 +1443,7 @@ function setPeriodeLaporan(periode) {
     start.setMonth(0,1);
     end.setMonth(11,31);
   }else return;
-  LAP.dari=toIso(start);LAP.sampai=toIso(end);LAP.bulan='';LAP.tahun='';
+  LAP.dari=toIso(start);LAP.sampai=toIso(end);
   render();
 }
 
@@ -1465,8 +1463,6 @@ function pageLaporan() {
         <label>Jenis laporan<select data-lap="jenis">${pilihan}</select></label>
         <label>Dari tanggal<input type="date" data-lap="dari" value="${LAP.dari}"></label>
         <label>Sampai tanggal<input type="date" data-lap="sampai" value="${LAP.sampai}"></label>
-        <label>Bulan<input type="month" data-lap="bulan" value="${LAP.bulan}"></label>
-        <label>Tahun<input type="number" data-lap="tahun" placeholder="2026" value="${LAP.tahun}"></label>
         <label>Jenis tanaman<select data-lap="jenisTanaman"><option value="">Semua</option>${opsiJenis}</select></label>
         <label>Pegawai<select data-lap="pegawaiId"><option value="">Semua pegawai</option>${DB.all('pegawai').map(p=>`<option value="${p.id}" ${String(LAP.pegawaiId)===String(p.id)?'selected':''}>${esc(p.nama)}</option>`).join('')}</select></label>
         <button class="btn ghost" data-act="lapPeriode" data-periode="minggu">Minggu ini</button>
