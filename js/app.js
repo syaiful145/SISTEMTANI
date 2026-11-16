@@ -1508,6 +1508,7 @@ function pageKalender() {
   const tambahEv = (tg, txt, cls) => { if (!tg) return; (ev[tg] = ev[tg] || []).push({ txt, cls }); };
   DB.all('penanaman').forEach(p => tambahEv(p.tanggal, `Tanam: ${namaTanaman(p.tanamanId)}`, 'c-tanam'));
   DB.all('panen').forEach(p => tambahEv(p.tanggal, `Panen: ${tanamanDariPanen(p)} (${rp(p.kg)} kg)`, 'c-panen'));
+  DB.all('pekerjaanLahan').forEach(t => tambahEv(t.tanggal, `Pekerjaan: ${t.judul} · ${waktuTugas(t)} · ${(DB.get('lahan',t.lahanId)||{}).nama||'Lahan'}`, 'c-prediksi'));
   DB.all('tanaman').filter(t => t.status !== 'Selesai').forEach(t =>
     tambahEv(addDays(t.tanggalTanam, t.umurPanen), `Prediksi panen: ${t.nama}`, 'c-prediksi'));
 
@@ -1905,6 +1906,7 @@ function kartuPekerjaanLahan(t,assignment=null) {
   const land=DB.get('lahan',t.lahanId);
   const status=assignment?assignment.status:t.status;
   const logs=DB.all('progresLahan').filter(p=>assignment?String(p.penugasanId)===String(assignment.id):false);
+  const recipients=DB.all('penugasanLahan').filter(a=>String(a.pekerjaanId)===String(t.id)).map(a=>namaPegawai(a.pegawaiId)).filter(Boolean);
   const action=assignment&&(status==='berjalan'||status==='perlu_perbaikan')
     ?'<button class="btn tiny" data-act="catatProgresLahan" data-id="'+assignment.id+'">Catat progres</button>'
     : '';
@@ -1913,7 +1915,7 @@ function kartuPekerjaanLahan(t,assignment=null) {
     (t.instruksi?'<p>'+esc(t.instruksi)+'</p>':'')+
     (assignment&&assignment.status==='perlu_perbaikan'?'<p class="text-red">Catatan Admin: '+esc(assignment.catatanAdmin||'Silakan perbaiki progres.')+'</p>':'')+
     '<div class="row-actions">'+action+'</div>'+
-    (isAdmin()?'<p class="muted">'+DB.all('penugasanLahan').filter(a=>String(a.pekerjaanId)===String(t.id)).length+' penerima · '+(t.penerimaMode==='semua'?'Semua anggota saat dibuat':'Pegawai pilihan')+'</p>':'')+
+    (isAdmin()?'<p class="muted">'+recipients.length+' penerima · '+(t.penerimaMode==='semua'?'Semua anggota saat dibuat':'Pegawai pilihan')+' · '+esc(recipients.join(', '))+'</p>':'')+
     '</article>';
 }
 function pagePekerjaanLahan() {
