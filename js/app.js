@@ -324,9 +324,17 @@ function openCrud(tbl, id) {
     const err = cfg.validasi ? cfg.validasi(data, lama, id) : null;
     if (err) return err;
     if (tbl === 'barang') {
+      // Cegah kode barang ganda sebelum memanggil RPC; abaikan barang yang sedang diedit.
+      const kodeBaru = String(data.kode || '').trim().toLowerCase();
+      const kodeDipakai = DB.all('barang').some(b =>
+        String(b.kode || '').trim().toLowerCase() === kodeBaru &&
+        Number(b.id) !== Number(id)
+      );
+      if (kodeDipakai) return 'Kode barang sudah digunakan. Gunakan kode yang berbeda.';
+
       const { data: barangId, error } = await supabaseClient.rpc('admin_simpan_barang', {
         p_id: id ? Number(id) : null,
-        p_kode: data.kode,
+        p_kode: String(data.kode || '').trim(),
         p_nama: data.nama,
         p_kategori: data.kategori,
         p_satuan: data.satuan,
@@ -334,6 +342,9 @@ function openCrud(tbl, id) {
         p_stok_awal: id ? 0 : Number(data.stok || 0),
         p_tanggal_masuk: data.tanggalMasuk || hariIni()
       });
+      if (error?.code === '23505' || /barang_kode_key|duplicate key/i.test(error?.message || '')) {
+        return 'Kode barang sudah digunakan. Gunakan kode yang berbeda.';
+      }
       if (error) throw new Error(`Gagal menyimpan barang: ${error.message}`);
       if (!barangId) throw new Error('Database tidak mengembalikan ID barang.');
       await DB.init(isAdmin());
