@@ -1529,7 +1529,6 @@ function detailPegawai(id) {
   openInfo('Detail Pegawai', '<div class="detail-profile"><div class="detail-avatar">👤</div><h2>' + esc(p.nama) + '</h2><p>' + esc(p.jabatan || '-') + '</p>' + status +
     '<div class="detail-grid">' +
     '<div><small>ID Pegawai</small><strong>' + esc(p.idPegawai || '-') + '</strong></div>' +
-    '<div><small>Username</small><strong>' + esc(p.username || '-') + '</strong></div>' +
     '<div><small>Email</small><strong>' + esc(p.email || '-') + '</strong></div>' +
     '<div><small>WhatsApp</small><strong>' + esc(p.telepon || '-') + '</strong></div>' +
     '<div><small>Status Kerja</small><strong>' + esc(p.statusKerja || '-') + '</strong></div>' +
@@ -1664,12 +1663,11 @@ async function muatPermohonanAdmin() {
     const apps = data.applications || [];
     const rows = apps.map(x => [
       '<strong>' + esc(x.nama) + '</strong>',
-      esc(x.username),
       esc(x.email),
       tgl(x.created_at),
       '<div class="row-actions"><button class="btn tiny" data-act="approveAdminApplication" data-id="' + esc(x.id) + '">Setujui</button><button class="btn tiny danger" data-act="rejectAdminApplication" data-id="' + esc(x.id) + '">Tolak</button></div>'
     ]);
-    box.outerHTML = tabel(['Nama', 'Username', 'Email', 'Tanggal', 'Tindakan'], rows, 'Tidak ada permohonan admin yang menunggu.');
+    box.outerHTML = tabel(['Nama', 'Email', 'Tanggal', 'Tindakan'], rows, 'Tidak ada permohonan admin yang menunggu.');
   } catch (err) {
     box.textContent = 'Gagal memuat permohonan: ' + (err.message || 'Kesalahan tidak diketahui.');
   }
@@ -1700,13 +1698,12 @@ function pageAdmins() {
   return { html: head('Manajemen Admin') + '<div id="admin-list-loading" class="empty">Memuat daftar administrator...</div>', after: async () => {
     const target = $('#admin-list-loading');
     try {
-      const { data, error } = await supabaseClient.from('profiles').select('id,nama,username,role,admin_level').eq('role', 'admin').order('nama');
+      const { data, error } = await supabaseClient.from('profiles').select('id,nama,role,admin_level').eq('role', 'admin').order('nama');
       if (error) throw error;
       const admins = data || [];
       const utama = isAdminUtama();
       const rows = admins.map(x => [
         '<strong>' + esc(x.nama) + '</strong>',
-        esc(x.username || '-'),
         x.admin_level === 'utama' ? '<span class="tag green">Admin Utama</span>' : '<span class="tag blue">Admin Kedua</span>',
         x.admin_level === 'kedua' && utama
           ? '<div class="row-actions"><button class="btn tiny ghost" data-act="resetAdmin" data-id="' + esc(x.id) + '" data-nama="' + esc(x.nama) + '">Reset Password</button><button class="btn tiny danger" data-act="hapusAdmin" data-id="' + esc(x.id) + '" data-nama="' + esc(x.nama) + '">Hapus</button></div>'
@@ -1716,7 +1713,7 @@ function pageAdmins() {
         '</strong></div><div class="stat"><span>Admin Utama</span><strong>' + admins.filter(x => x.admin_level === 'utama').length +
         '</strong></div><div class="stat"><span>Admin Kedua</span><strong>' + admins.filter(x => x.admin_level === 'kedua').length +
         '</strong></div></div>' + (utama ? '<p class="muted">Admin Utama dapat mereset password dan menghapus Admin Kedua. Akun Admin Utama dilindungi.</p>' : '<p class="muted">Anda dapat melihat daftar administrator. Pengelolaan akun hanya tersedia untuk Admin Utama.</p>') +
-        tabel(['Nama', 'Username', 'Tingkatan', 'Aksi'], rows, 'Belum ada administrator.') +
+        tabel(['Nama', 'Tingkatan', 'Aksi'], rows, 'Belum ada administrator.') +
         (utama ? '<section class="card" style="margin-top:20px"><h3>Permohonan Admin Kedua</h3><div id="admin-applications-loading" class="empty">Memuat permohonan...</div></section>' : '');
       if (utama) muatPermohonanAdmin();
     } catch (ex) { target.textContent = 'Gagal memuat daftar admin: ' + (ex.message || 'Periksa izin akses.'); }
@@ -2164,12 +2161,9 @@ function setAuthMode(mode) {
 async function daftarPegawai(e) {
   e.preventDefault();
   const nama = $('#r-nama').value.trim();
-  const idPegawai = $('#r-id').value.trim();
   const email = $('#r-email').value.trim();
-  const username = $('#r-username').value.trim().toLowerCase();
   const jabatan = $('#r-jabatan').value.trim();
   const msg = $('#r-msg');
-  // Samakan format nomor agar 08xxx dan +62xxx dianggap nomor yang sama.
   let telepon = $('#r-telepon').value.replace(/[^0-9]/g, '');
   if (telepon.startsWith('0')) telepon = '62' + telepon.slice(1);
   else if (telepon.startsWith('8')) telepon = '62' + telepon;
@@ -2182,8 +2176,8 @@ async function daftarPegawai(e) {
   const password = $('#r-pass').value;
   const ulangi = $('#r-pass2').value;
   msg.classList.remove('error');
-  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
-    msg.textContent = 'Username harus 3–30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.';
+  if (!nama) {
+    msg.textContent = 'Nama lengkap wajib diisi.';
     msg.classList.add('error');
     return;
   }
@@ -2200,20 +2194,20 @@ async function daftarPegawai(e) {
     const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
-      options: { data: { nama, username, id_pegawai: idPegawai, jabatan, telepon, alamat } }
+      options: { data: { nama, jabatan, telepon, alamat } }
     });
     if (error) throw error;
     if (!data.user) throw new Error('Pendaftaran belum berhasil. Silakan coba lagi.');
     $('#register-form').reset();
     msg.textContent = data.session
-      ? 'Pendaftaran berhasil. Akun menunggu persetujuan admin sebelum dapat digunakan.'
-      : 'Pendaftaran dibuat, tetapi konfirmasi email Supabase masih aktif. Admin perlu menonaktifkan konfirmasi email agar alur tanpa OTP dapat digunakan.';
+      ? 'Pendaftaran berhasil. ID Pegawai dibuat otomatis dan akun menunggu persetujuan admin.'
+      : 'Pendaftaran dibuat, tetapi konfirmasi email Supabase masih aktif. Periksa email untuk melanjutkan proses.';
   } catch (err) {
     const detail = String(err.message || '');
     if (/already registered|already exists|duplicate key|unique constraint|23505/i.test(detail)) {
       msg.textContent = /email|user/i.test(detail)
         ? 'Email tersebut sudah terdaftar. Gunakan email lain.'
-        : 'ID pegawai atau nomor WhatsApp tersebut sudah digunakan. Periksa kembali datanya.';
+        : 'Data pendaftaran bertabrakan dengan data yang sudah ada. Hubungi Admin.';
     } else {
       msg.textContent = detail || 'Pendaftaran gagal. Periksa data dan koneksi, lalu coba lagi.';
     }
@@ -2227,15 +2221,15 @@ async function daftarPegawai(e) {
 async function daftarAdmin(e) {
   e.preventDefault();
   const nama = $('#ra-nama').value.trim();
-  const username = $('#ra-username').value.trim().toLowerCase();
   const email = $('#ra-email').value.trim();
   const password = $('#ra-pass').value;
   const ulangi = $('#ra-pass2').value;
   const msg = $('#ra-msg');
   msg.classList.remove('error');
-  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
-    msg.textContent = 'Username harus 3–30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.';
-    msg.classList.add('error'); return;
+  if (!nama) {
+    msg.textContent = 'Nama lengkap wajib diisi.';
+    msg.classList.add('error');
+    return;
   }
   if (password.length < 8 || password !== ulangi) {
     msg.textContent = password.length < 8 ? 'Password minimal 8 karakter.' : 'Konfirmasi password tidak sama.';
@@ -2247,7 +2241,7 @@ async function daftarAdmin(e) {
   try {
     const { data, error } = await supabaseClient.auth.signUp({
       email, password,
-      options: { data: { nama, username, requested_role: 'admin' } }
+      options: { data: { nama, requested_role: 'admin' } }
     });
     if (error) throw error;
     if (!data.user) throw new Error('Permohonan belum berhasil dibuat.');
