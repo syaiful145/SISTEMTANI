@@ -1851,7 +1851,17 @@ function render() {
   const m = MENU.find(x => x.id === r);
   if (!m || !menuVisible(m)) r = 'dashboard';
 
-  const page = PAGES[r]();
+  let page;
+  try {
+    page = PAGES[r]();
+  } catch (error) {
+    console.error('Gagal merender halaman ' + r + ':', error);
+    if (r === 'gudang') {
+      page = { html: head('Gudang') + '<div class="card"><h3>Gudang gagal dimuat</h3><p>Pesan kesalahan: ' + esc(error?.message || error) + '</p><p class="muted">Kirimkan pesan ini agar penyebabnya bisa diperbaiki tanpa mengubah data stok.</p></div>' };
+    } else {
+      throw error;
+    }
+  }
   $('#content').innerHTML = page.html;
   if (page.after) page.after();
 
