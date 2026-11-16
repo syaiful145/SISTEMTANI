@@ -13,10 +13,13 @@ DROP POLICY IF EXISTS barang_admin_delete ON public.barang;
 DROP POLICY IF EXISTS agricore_transaksi_manage ON public.transaksi;
 
 -- Hak langsung hanya untuk membaca. Semua mutasi melalui fungsi tervalidasi.
+ALTER TABLE public.barang ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transaksi ENABLE ROW LEVEL SECURITY;
+
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-  ON TABLE public.barang FROM authenticated;
+  ON TABLE public.barang FROM PUBLIC, anon, authenticated;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-  ON TABLE public.transaksi FROM authenticated;
+  ON TABLE public.transaksi FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE public.barang, public.transaksi TO authenticated;
 
 -- Sequence tidak lagi diperlukan oleh klien karena INSERT dilakukan oleh RPC.
@@ -26,7 +29,7 @@ DECLARE
 BEGIN
   v_sequence := pg_get_serial_sequence('public.barang', 'id');
   IF v_sequence IS NOT NULL THEN
-    EXECUTE format('REVOKE USAGE, SELECT ON SEQUENCE %s FROM authenticated', v_sequence);
+    EXECUTE format('REVOKE USAGE, SELECT ON SEQUENCE %s FROM PUBLIC, anon, authenticated', v_sequence);
   END IF;
   v_sequence := pg_get_serial_sequence('public.transaksi', 'id');
   IF v_sequence IS NOT NULL THEN
@@ -62,7 +65,7 @@ BEGIN
     RAISE EXCEPTION 'Hanya Admin yang dapat mencatat transaksi stok.';
   END IF;
 
-  IF p_jenis NOT IN ('Masuk','Keluar') OR p_jumlah IS NULL OR p_jumlah <= 0 THEN
+  IF p_jenis IS NULL OR p_jenis NOT IN ('Masuk','Keluar') OR p_jumlah IS NULL OR p_jumlah <= 0 THEN
     RAISE EXCEPTION 'Jenis transaksi atau jumlah stok tidak valid.';
   END IF;
 
