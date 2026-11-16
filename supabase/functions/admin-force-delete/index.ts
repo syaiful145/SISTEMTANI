@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const table = String(body?.table || "");
     const id = Number(body?.id);
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("ID data tidak valid.");
-    const allowed = ["pegawai","barang","lahan","tanaman","penanaman","panen","laporan","transaksi","absensi","izin_pegawai"];
+    const allowed = ["pegawai","barang","lahan","tanaman","penanaman","panen","laporan","transaksi","absensi","izin_pegawai","pekerjaan_lahan"];
     if (!allowed.includes(table)) throw new Error("Jenis data tidak diizinkan.");
 
     const bodyFiles = Array.isArray(body?.files) ? body.files : [];
