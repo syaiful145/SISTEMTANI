@@ -77,7 +77,7 @@ const MENU = [
   { id: 'tanaman', label: 'Tanaman', icon: '🌿' },
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
-  { id: 'gudang', label: 'Gudang', icon: '📦', akses: 'gudang' },
+  { id: 'pupuk', label: 'Gudang', icon: '📦', akses: 'gudang' },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
   { id: 'kelompok', label: 'Kelompok Kerja', icon: '👥' },
   { id: 'aktivitas', label: 'Pekerjaan Lapangan', icon: '📝' },
@@ -95,7 +95,7 @@ function menuVisible(m) {
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
   if (m.id === 'penanaman' || m.id === 'panen') return true; // Modul kerja lapangan tersedia untuk semua pegawai.
-  if (m.id === 'gudang') return true; // Pegawai hanya melihat sisa stok benih.
+  if (m.id === 'pupuk') return true; // Pegawai dapat melihat halaman Gudang.
   return !m.akses || u.akses.includes(m.akses);
 }
 
@@ -865,9 +865,10 @@ function gambarGrafik() {
 function pagePupuk() {
   const cfg = cfgBarang();
   cfg.judul = 'Gudang';
-  cfg.kosong = 'Belum ada barang di gudang. Admin dapat menambahkan Bibit, Pupuk, Hasil Panen, atau perlengkapan lainnya.';
+  cfg.kosong = 'Belum ada data pupuk. Admin dapat menambahkan barang melalui tombol Tambah Barang.';
   cfg.labelTambah = '+ Tambah Barang';
-  cfg.catatan = '<p class="muted">Semua persediaan dikelola di satu tempat: Bibit, Pupuk, Hasil Panen, Pestisida, Peralatan pertanian, dan Perlengkapan lainnya. Gunakan tombol Masuk, Keluar, atau Detail pada setiap barang.</p>';
+  cfg.filter = null;
+  cfg.catatan = '<p class="muted">Kelola persediaan dari halaman Gudang. Data barang dan stok yang sudah tersimpan tetap dipertahankan.</p>';
   return { html: crud('barang', cfg) };
 }
 
@@ -1766,7 +1767,6 @@ const PAGES = {
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
   penanaman: () => pagePekerjaan('Penanaman'),
   panen: () => pagePekerjaan('Panen'),
-  gudang: pagePupuk,
   pupuk: pagePupuk,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
   kelompok: pageKelompok,
