@@ -202,8 +202,11 @@ function formHTML(fields, v) {
         ${opsi(f).map(([k, l]) => `<option value="${esc(k)}" ${String(k) === String(val) ? 'selected' : ''}>${esc(l)}</option>`).join('')}
       </select>`;
     } else if (f.type === 'checks') {
-      input = `<div class="checks">${opsi(f).map(([k, l]) =>
-        `<label><input type="checkbox" name="${f.name}" value="${esc(k)}" ${(val || []).includes(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>`;
+      const search = f.search
+        ? `<input type="search" class="check-search" data-check-search="${f.name}" placeholder="Cari nama atau ID pegawai..." autocomplete="off">`
+        : '';
+      input = search + `<div class="checks">${opsi(f).map(([k, l]) =>
+        `<label data-check-option="${f.name}" data-search-text="${esc((String(l) + ' ' + String(k)).toLowerCase())}"><input type="checkbox" name="${f.name}" value="${esc(k)}" ${(val || []).map(String).includes(String(k)) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>`;
     } else if (f.type === 'textarea') {
       input = `<textarea name="${f.name}" rows="3" ${req}>${esc(val)}</textarea>`;
     } else if (f.type === 'image') {
@@ -260,6 +263,15 @@ function openModal(judul, fields, nilai, onSave) {
     </form></div>`;
   box.classList.remove('hidden');
   box.querySelectorAll('[data-tutup]').forEach(b => (b.onclick = tutupModal));
+  box.querySelectorAll('[data-check-search]').forEach(search => {
+    search.addEventListener('input', () => {
+      const field = search.dataset.checkSearch;
+      const query = search.value.trim().toLowerCase();
+      box.querySelectorAll('[data-check-option="' + field + '"]').forEach(option => {
+        option.hidden = query !== '' && !option.dataset.searchText.includes(query);
+      });
+    });
+  });
   $('#mform').onsubmit = async e => {
     e.preventDefault();
     try {
@@ -1905,7 +1917,7 @@ async function buatPekerjaanLahan(lahanId) {
     {name:'jamSelesai',label:'Jam selesai',type:'time'},
     {name:'tenggat',label:'Batas penyelesaian (opsional)',type:'date'},
     {name:'penerimaMode',label:'Penerima pekerjaan',type:'select',options:[['semua','Semua anggota lahan'],['tertentu','Pilih pegawai tertentu']],req:true,def:'semua'},
-    {name:'pegawaiIds',label:'Pegawai tertentu (dipakai jika memilih Pilih pegawai tertentu)',type:'checks',full:true,options:members.map(p=>[String(p.id),p.nama])}
+    {name:'pegawaiIds',label:'Pilih pegawai penerima (cari dengan nama atau ID)',type:'checks',search:true,full:true,options:members.map(p=>[String(p.id),p.nama+' · ID '+p.id])}
   ];
   openModal('Buat Pekerjaan · '+lahan.nama,fields,{tanggal:hariIni(),penerimaMode:'semua'},async data=>{
     if(data.jamMulai&&data.jamSelesai&&data.jamSelesai<=data.jamMulai)return 'Jam selesai harus setelah jam mulai.';
