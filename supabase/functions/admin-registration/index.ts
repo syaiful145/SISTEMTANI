@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     if (body.action === "list") {
       const { data, error } = await adminClient.from("admin_applications")
-        .select("id,auth_user_id,nama,username,email,status,created_at")
+        .select("id,auth_user_id,nama,email,status,created_at")
         .eq("status", "menunggu").order("created_at", { ascending: true });
       if (error) throw error;
       return json({ success: true, applications: data || [] });
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       const { error: profileError } = await adminClient.from("profiles").insert({
         id: application.auth_user_id,
         nama: application.nama,
-        username: application.username,
+        username: "akun_" + application.auth_user_id.replaceAll("-", ""),
         role: "admin",
         admin_level: "kedua",
         pegawai_id: null,
