@@ -467,3 +467,24 @@ tr:last-child td { border-bottom: none; }
 .forgot-title { margin: 0 0 8px; text-align: left !important; }
 .register-access { margin-top: 4px; }
 @media (max-width: 480px) { .login-card-modern { padding: 26px 20px; } }
+
+
+/* ===== Operasional berbasis lahan ===== */
+.task-visual-card {
+  background: #fff;
+  border: 1px solid var(--garis);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 0 12px;
+}
+.task-visual-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.task-visual-card p { margin: 8px 0; }
+.task-visual-card .row-actions { margin-top: 12px; }
+@media (max-width: 640px) {
+  .task-visual-title { flex-direction: column; }
+}
