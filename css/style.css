@@ -467,3 +467,53 @@ tr:last-child td { border-bottom: none; }
 .forgot-title { margin: 0 0 8px; text-align: left !important; }
 .register-access { margin-top: 4px; }
 @media (max-width: 480px) { .login-card-modern { padding: 26px 20px; } }
+
+
+/* ===== Tampilan kartu tugas AgriCore ===== */
+.task-list-card > .page-head { margin-bottom: 8px; }
+.task-list-card > .page-head p { margin: 5px 0 0; font-size: 13px; }
+.task-visual-list { display: grid; gap: 12px; }
+.task-visual-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 190px);
+  gap: 18px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--garis);
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.task-visual-card:hover {
+  border-color: var(--hijau-tengah);
+  box-shadow: 0 4px 14px rgba(20, 75, 45, .07);
+}
+.task-visual-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.task-visual-title h4 { margin: 0; color: var(--hijau); font-size: 16px; }
+.task-visual-instruction { margin: 8px 0 10px; color: var(--abu); font-size: 13px; line-height: 1.5; }
+.task-visual-meta { display: flex; flex-wrap: wrap; gap: 7px; }
+.task-visual-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--hijau-muda);
+  color: #365b43;
+  font-size: 12px;
+}
+.task-visual-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+.task-visual-progress { display: flex; align-items: baseline; gap: 6px; color: var(--abu); font-size: 12px; }
+.task-visual-progress strong { color: var(--hijau); font-size: 20px; }
+.task-visual-side .row-actions { justify-content: flex-end; }
+@media (max-width: 700px) {
+  .task-visual-card { grid-template-columns: 1fr; gap: 12px; padding: 14px; }
+  .task-visual-side { align-items: flex-start; border-top: 1px solid var(--garis); padding-top: 10px; }
+  .task-visual-side .row-actions { justify-content: flex-start; }
+}

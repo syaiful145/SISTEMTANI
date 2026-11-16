@@ -1755,30 +1755,89 @@ function barisTugas(t,logs) {
     '<div class="muted">'+logs.filter(l=>String(l.tugasId)===String(t.id)).length+' catatan progres</div>'
   ];
 }
+function bukaFormTugas() {
+  if (!isAdmin()) return;
+  const staff = DB.all('pegawai').filter(p => p.statusVerifikasi === 'disetujui');
+  const groups = DB.all('kelompok').slice().sort((a,b) => String(a.nama).localeCompare(String(b.nama)));
+  const targets = [
+    ...staff.map(p => ['pegawai:' + p.id, 'Individu · ' + p.nama]),
+    ...groups.map(g => ['kelompok:' + g.id, 'Kelompok · ' + g.nama])
+  ];
+  if (!targets.length) return alert('Belum ada pegawai aktif atau kelompok yang dapat menerima tugas.');
+  const fields = [
+    { name: 'judul', label: 'Nama tugas', req: true },
+    { name: 'target', label: 'Ditugaskan kepada', type: 'select', options: targets, req: true },
+    { name: 'jenis', label: 'Jenis pekerjaan', type: 'select', options: [['Penanaman','Penanaman'],['Pemupukan','Pemupukan'],['Perawatan','Perawatan'],['Panen','Panen'],['Lainnya','Lainnya']], def: 'Perawatan', req: true },
+    { name: 'deskripsi', label: 'Instruksi pekerjaan', type: 'textarea', full: true },
+    { name: 'lahanNama', label: 'Nama lahan (opsional)' },
+    { name: 'tanggalMulai', label: 'Tanggal mulai', type: 'date', def: hariIni(), req: true },
+    { name: 'tenggat', label: 'Tenggat (opsional)', type: 'date' }
+  ];
+  openModal('Buat Tugas', fields, { tanggalMulai: hariIni(), jenis: 'Perawatan' }, async data => {
+    if (!data.judul?.trim()) return 'Nama tugas wajib diisi.';
+    if (!data.target) return 'Pilih pegawai atau kelompok penerima tugas.';
+    if (data.tenggat && data.tenggat < data.tanggalMulai) return 'Tenggat tidak boleh sebelum tanggal mulai.';
+    const [tipe, id] = data.target.split(':');
+    const targetRow = tipe === 'pegawai'
+      ? staff.find(p => String(p.id) === id)
+      : groups.find(g => String(g.id) === id);
+    if (!targetRow) return 'Penerima tugas tidak ditemukan. Silakan pilih ulang.';
+    const pegawaiId = tipe === 'pegawai' ? targetRow.id : null;
+    const kelompokId = tipe === 'kelompok' ? targetRow.id : null;
+    await DB.add('tugasKelompok', {
+      pegawaiId, kelompokId, judul: data.judul.trim(),
+      deskripsi: data.deskripsi || '', jenis: data.jenis || 'Perawatan',
+      lahanNama: data.lahanNama || '', tanggalMulai: data.tanggalMulai || hariIni(),
+      tenggat: data.tenggat || null, status: 'berjalan'
+    });
+    await catat('Buat tugas', data.judul.trim());
+    await DB.init(true);
+    return null;
+  });
+}
+
 function pageKelompok() {
   const groups = DB.all('kelompok').slice().sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
   const members = DB.all('anggotaKelompok');
-  const tasks = DB.all('tugasKelompok').slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const tasks = DB.all('tugasKelompok').slice().sort((a,b)=>String(b.createdAt||b.tanggalMulai||'').localeCompare(String(a.createdAt||a.tanggalMulai||'')));
   const logs = DB.all('aktivitasTugas').slice().sort((a,b)=>String(b.tanggal||'').localeCompare(String(a.tanggal||'')));
   const mine = isAdmin() ? groups : groups.filter(g => members.some(m => String(m.kelompokId)===String(g.id) && String(m.pegawaiId)===String(me().id)));
   const visibleTasks = tasks.filter(t => isAdmin()
     ? true
     : (String(t.pegawaiId)===String(me().id) || (t.kelompokId && members.some(m=>String(m.kelompokId)===String(t.kelompokId)&&String(m.pegawaiId)===String(me().id)))));
-  const groupCards = mine.map(g => {
+  const groupCards = isAdmin() ? mine.map(g => {
     const gm = members.filter(m=>String(m.kelompokId)===String(g.id));
-    const gt = visibleTasks.filter(t=>String(t.kelompokId)===String(g.id));
-    const memberRows = gm.map(m=>[esc(namaPegawai(m.pegawaiId))]);
-    const taskRows = gt.map(t=>barisTugas(t,logs));
-    return '<section class="card"><div class="page-head"><h3>'+esc(g.nama)+'</h3>'+(isAdmin()?'<button class="btn ghost" data-act="tambahAnggotaKelompok" data-id="'+g.id+'">+ Anggota</button>':'')+'</div><p class="muted">'+esc(g.deskripsi||'')+'</p><h4>Anggota ('+gm.length+')</h4>'+tabel(['Pegawai'],memberRows,'Belum ada anggota.')+'<div class="page-head" style="margin-top:18px"><h4>Tugas Kelompok</h4>'+(isAdmin()?'<button class="btn" data-act="buatTugasKelompok" data-id="'+g.id+'">+ Beri Tugas</button>':'')+'</div>'+tabel(['Tugas','Tindakan','Progres'],taskRows,'Belum ada tugas untuk kelompok ini.')+'</section>';
+    return '<section class="card"><div class="page-head"><h3>'+esc(g.nama)+'</h3><button class="btn ghost" data-act="tambahAnggotaKelompok" data-id="'+g.id+'">+ Anggota</button></div><p class="muted">'+esc(g.deskripsi||'')+'</p><h4>Anggota ('+gm.length+')</h4>'+tabel(['Pegawai'],gm.map(m=>[esc(namaPegawai(m.pegawaiId))]),'Belum ada anggota.')+'</section>';
+  }).join('') : '';
+  const personal = visibleTasks.filter(t=>!t.kelompokId).length;
+  const groupTaskCount = visibleTasks.filter(t=>!!t.kelompokId).length;
+  const active = visibleTasks.filter(t=>t.status==='berjalan').length;
+  const waiting = visibleTasks.filter(t=>t.status==='menunggu_verifikasi'||t.status==='menunggu_persetujuan_lanjut').length;
+  const taskCards = visibleTasks.map(t => {
+    const tujuan = t.kelompokId
+      ? 'Kelompok · ' + (DB.get('kelompok',t.kelompokId)?.nama || 'Kelompok')
+      : 'Individu · ' + namaPegawai(t.pegawaiId);
+    const jumlahLog = logs.filter(l=>String(l.tugasId)===String(t.id)).length;
+    return '<article class="task-visual-card">' +
+      '<div class="task-visual-main"><div class="task-visual-title"><h4>'+esc(t.judul)+'</h4>'+tagStatus(labelStatusTugas(t.status))+'</div>' +
+      '<p class="task-visual-instruction">'+esc(t.deskripsi || 'Tidak ada instruksi tambahan.')+'</p>' +
+      '<div class="task-visual-meta"><span>'+esc(t.jenis || 'Pekerjaan')+'</span><span>'+esc(t.lahanNama || 'Tanpa lahan')+'</span><span>'+esc(tujuan)+'</span><span>Tenggat: '+esc(t.tenggat || 'Belum ditentukan')+'</span></div></div>' +
+      '<div class="task-visual-side"><div class="task-visual-progress"><strong>'+jumlahLog+'</strong><span>catatan progres</span></div><div class="row-actions">'+aksiStatusTugas(t)+'</div></div>' +
+      '</article>';
   }).join('');
-  const personal = visibleTasks.filter(t=>!t.kelompokId);
-  const pending = visibleTasks.filter(t=>t.status==='menunggu_persetujuan_lanjut').length;
-  const pendingFinish = visibleTasks.filter(t=>t.status==='menunggu_verifikasi').length;
-  return {html:head('Tugas & Kelompok Kerja',isAdmin()?'<button class="btn ghost" data-act="buatKelompok">+ Kelompok</button><button class="btn" data-act="buatTugasPerorangan">+ Tugas Perorangan</button>':'')+
-    '<div class="stats"><div class="stat"><span>Kelompok</span><strong>'+mine.length+'</strong></div><div class="stat"><span>Tugas aktif</span><strong>'+visibleTasks.filter(t=>t.status==='berjalan').length+'</strong></div><div class="stat"><span>Perlu keputusan admin</span><strong>'+(isAdmin()?pending+pendingFinish:pending)+'</strong></div></div>'+
-    (isAdmin() && (pending+pendingFinish)>0 ? '<section class="card"><h3>Perlu Tindakan Admin</h3><p class="muted">'+pending+' tugas menunggu persetujuan dilanjutkan · '+pendingFinish+' tugas menunggu pemeriksaan hasil.</p></section>' : '')+
-    (groupCards || (!isAdmin() ? '<div class="empty">Kamu belum tergabung dalam kelompok kerja.</div>' : ''))+
-    (personal.length ? '<section class="card"><h3>Tugas Perorangan</h3>'+tabel(['Tugas','Tindakan','Progres'],personal.map(t=>barisTugas(t,logs)),'Belum ada tugas perorangan.')+'</section>' : '')};
+  const intro = isAdmin()
+    ? 'Buat tugas untuk satu pegawai atau satu kelompok. Kelompok bersifat pilihan, bukan syarat untuk memberi tugas.'
+    : 'Semua tugas untuk kamu, baik tugas pribadi maupun tugas kelompok, ditampilkan di sini. Catat progres saat bekerja dan ajukan pemeriksaan setelah selesai.';
+  return {
+    html: head(isAdmin() ? 'Tugas & Kelompok Kerja' : 'Tugas Saya', isAdmin()
+      ? '<button class="btn" data-act="buatTugasTerpadu">+ Buat Tugas</button>'
+      : '') +
+      '<p class="muted">'+intro+'</p>'+
+      '<div class="stats"><div class="stat"><span>Tugas aktif</span><strong>'+active+'</strong></div><div class="stat"><span>Menunggu pemeriksaan/keputusan</span><strong>'+waiting+'</strong></div><div class="stat"><span>Individu · Kelompok</span><strong>'+personal+' · '+groupTaskCount+'</strong></div></div>'+
+      (isAdmin() && waiting ? '<section class="card"><h3>Perlu Tindakan Admin</h3><p class="muted">'+waiting+' tugas memerlukan pemeriksaan atau keputusan Admin. Gunakan tindakan pada baris tugas.</p></section>' : '')+
+      '<section class="card task-list-card"><div class="page-head"><div><h3>'+ (isAdmin() ? 'Daftar Semua Tugas' : 'Daftar Tugas Saya') +'</h3><p class="muted">Informasi tugas dan tindakan ditampilkan dalam satu kartu.</p></div></div>'+(taskCards ? '<div class="task-visual-list">'+taskCards+'</div>' : '<div class="empty">Belum ada tugas yang ditetapkan.</div>')+'</section>'+
+      (isAdmin() ? '<section class="card"><div class="page-head"><h3>Kelompok Kerja</h3><button class="btn ghost" data-act="buatKelompok">+ Buat Kelompok</button></div><p class="muted">Kelompok hanya digunakan bila Admin memilih penugasan bersama. Tugas individu tidak memerlukan kelompok.</p>'+(groupCards || '<p class="muted">Belum ada kelompok. Admin tetap dapat memberi tugas langsung kepada pegawai.</p>')+'</section>' : (mine.length ? '<section class="card"><h3>Kelompok Saya</h3><p>'+mine.map(g=>esc(g.nama)).join(' · ')+'</p></section>' : ''))
+  };
 }
 async function buatKelompok(){
   if(!isAdmin())return;
@@ -2006,6 +2065,7 @@ function aksiKlik(e) {
     case 'transaksi': return openTransaksi();
     case 'buatKelompok': return buatKelompok();
     case 'tambahAnggotaKelompok': return tambahAnggotaKelompok(Number(b.dataset.id));
+    case 'buatTugasTerpadu': return bukaFormTugas();
     case 'buatTugasKelompok': return buatTugasKelompok(Number(b.dataset.id));
     case 'buatTugasPerorangan': return buatTugasPerorangan();
     case 'catatAktivitasTugas': return catatAktivitasTugas(Number(b.dataset.id));
