@@ -562,7 +562,10 @@ function cfgPegawai() {
     judul: 'Data Pegawai',
     tambah: false, ubah: true, hapus: isAdminUtama(),
     nama: r => r.nama,
-    extra: r => '<button class="btn tiny" data-act="detailPegawai" data-id="' + r.id + '">Detail</button>',
+    extra: r => '<button class="btn tiny" data-act="detailPegawai" data-id="' + r.id + '">Detail</button>' +
+      (isAdmin() && r.statusVerifikasi === 'menunggu'
+        ? '<button class="btn tiny" data-act="setujuiPegawai" data-id="' + r.id + '">Izinkan</button><button class="btn tiny danger" data-act="tolakPegawai" data-id="' + r.id + '">Tolak</button>'
+        : ''),
     kolom: [
       { h: 'Nama Pegawai', f: r => '<strong>' + esc(r.nama) + '</strong><div class="muted">' + esc(r.jabatan || '-') + '</div>' },
       { h: 'ID Pegawai', f: r => esc(r.idPegawai) },
