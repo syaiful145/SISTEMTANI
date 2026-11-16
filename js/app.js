@@ -410,11 +410,15 @@ function detailLahan(id) {
   const land=DB.get('lahan',id); if(!land)return;
   const reports=DB.all('laporan').filter(l=>String(l.lahanId)===String(id));
   const memberships=DB.all('anggotaLahan').filter(m=>String(m.lahanId)===String(id)).sort((a,b)=>String(a.status).localeCompare(String(b.status))||String(a.tanggalMulai).localeCompare(String(b.tanggalMulai)));
+  const tasks=DB.all('pekerjaanLahan').filter(t=>String(t.lahanId)===String(id)).sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))||String(b.createdAt).localeCompare(String(a.createdAt)));
   const plantReports=reports.filter(l=>l.jenis==='Penanaman');
   const used=plantReports.filter(l=>l.status==='diterima').reduce((n,l)=>n+Number(l.luasM2||0),0);
   const planted=plantReports.reduce((n,l)=>n+Number(l.jumlahDitanam||0),0);
   const crops=[...new Set(plantReports.map(l=>l.tanamanNama).filter(Boolean))];
-  const rows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  const reportRows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
+  const taskHtml=tasks.length
+    ? tasks.map(t=>kartuPekerjaanLahan(t)).join('')
+    : '<div class="empty">Belum ada pekerjaan yang dibuat untuk lahan ini.</div>';
   openInfo('Detail Lahan · '+esc(land.nama),
     '<section class="card"><div class="page-head"><h3>Anggota Lahan ('+memberships.filter(m=>m.status==='aktif').length+' aktif)</h3>'+(isAdmin()?'<div class="page-actions"><button class="btn ghost" data-act="tambahAnggotaLahan" data-id="'+id+'">+ Tambah Pegawai</button><button class="btn" data-act="buatPekerjaanLahan" data-id="'+id+'">+ Buat Pekerjaan</button></div>':'')+'</div>'+tabel(['Pegawai','Mulai','Status','Tindakan'],memberships.map(m=>[esc(namaPegawai(m.pegawaiId)),tgl(m.tanggalMulai),m.status==='aktif'?'<span class="tag green">Aktif</span>':'<span class="tag">Nonaktif</span>',isAdmin()&&m.status==='aktif'?'<button class="btn tiny ghost" data-act="keluarkanAnggotaLahan" data-id="'+m.id+'">Nonaktifkan</button>':'-']),'Belum ada pegawai yang ditugaskan ke lahan ini.')+'</section>'+
     '<div class="detail-grid">'+
@@ -425,10 +429,14 @@ function detailLahan(id) {
     '<p><strong>Sisa lahan belum ditanami</strong><br>'+rp(Math.max(0,Number(land.luasTotalM2)-used))+' m²</p>'+
     '<p><strong>Jumlah tanaman dilaporkan</strong><br>'+rp(planted)+'</p>'+
     '<p><strong>Jenis tanaman</strong><br>'+esc(crops.join(', ')||'-')+'</p>'+
-    '</div><h4>Riwayat Pekerjaan Pegawai</h4>'+
-    tabel(['Tanggal','Pegawai','Tanaman','Luas','Jumlah ditanam','Status','Detail'],
-      rows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc(l.tanamanNama||'-'),l.luasM2==null?'-':rp(l.luasM2)+' m²',l.jumlahDitanam==null?'-':rp(l.jumlahDitanam),esc(l.statusTanaman||'-'),'<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+l.id+'">Detail</button>']),
-      'Belum ada pekerjaan yang dilaporkan pada lahan ini.'));
+    '</div><h4>Pekerjaan di Lahan Ini</h4>'+
+    '<p class="muted">Daftar tugas yang dibuat Admin. Membuat pekerjaan tidak otomatis membuat laporan atau foto bukti.</p>'+
+    taskHtml+
+    '<h4>Riwayat Laporan Pegawai</h4>'+
+    '<p class="muted">Bagian ini hanya berisi laporan yang benar-benar sudah dikirim pegawai. Foto bukti dapat dilihat dengan membuka detail laporan.</p>'+
+    tabel(['Tanggal laporan','Pegawai','Jenis kegiatan','Status','Detail'],
+      reportRows.map(l=>[tgl(l.tanggal),esc(namaPegawai(l.pegawaiId)),esc(l.jenis||'-'),l.status==='diterima'?'Diterima':'Menunggu pemeriksaan','<button class="btn tiny ghost" data-act="detailLaporan" data-id="'+l.id+'">Lihat laporan</button>']),
+      'Belum ada laporan yang dikirim pegawai untuk lahan ini.'));
 }
 
 /* ----- Konfigurasi tiap modul ----- */
