@@ -113,7 +113,6 @@ function menuVisible(m) {
   if (u.tipe === 'admin') return !m.pegawaiOnly;
   if (m.adminOnly) return false;
   if (m.id === 'penanaman' || m.id === 'panen') return true; // Perilaku lama dipertahankan.
-  if (m.id === 'pupuk') return Array.isArray(u.akses) && u.akses.includes('gudang');
   return !m.akses || (Array.isArray(u.akses) && u.akses.includes(m.akses));
 }
 
