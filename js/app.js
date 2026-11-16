@@ -24,7 +24,8 @@ const JENIS_LAPORAN = {
   panen: 'Laporan hasil panen',
   stok: 'Laporan stok gudang',
   keluarmasuk: 'Laporan barang masuk & keluar',
-  aktivitas: 'Laporan aktivitas pegawai'
+  aktivitas: 'Laporan aktivitas pegawai',
+  progres: 'Progres pekerjaan lahan'
 };
 
 const tagStatus = s => `<span class="tag ${WARNA_STATUS[s] || ''}">${esc(s)}</span>`;
@@ -1345,7 +1346,7 @@ function pageNotifikasi() {
 }
 
 /* ----- Laporan ----- */
-const LAP_DEFAULT = { jenis: 'penanaman', dari: '', sampai: '', bulan: '', tahun: '', jenisTanaman: '' };
+const LAP_DEFAULT = { jenis: 'penanaman', dari: '', sampai: '', bulan: '', tahun: '', jenisTanaman: '', pegawaiId: '' };
 let LAP = { ...LAP_DEFAULT };
 let LAP_DATA = null;
 
@@ -1358,12 +1359,13 @@ function cocokTgl(tg) {
   return true;
 }
 const cocokJenis = tanamanId => !LAP.jenisTanaman || jenisTanaman(tanamanId) === LAP.jenisTanaman;
+const cocokPegawai = pegawaiId => !LAP.pegawaiId || String(pegawaiId||'') === String(LAP.pegawaiId);
 const urut = (arr, k) => arr.slice().sort((a, b) => String(b[k] || '').localeCompare(String(a[k] || '')));
 
 function dataLaporan() {
   switch (LAP.jenis) {
     case 'penanaman': {
-      const rows = urut(DB.all('penanaman').filter(p => cocokTgl(p.tanggal) && cocokJenis(p.tanamanId)), 'tanggal');
+      const rows = urut(DB.all('penanaman').filter(p => cocokTgl(p.tanggal) && cocokJenis(p.tanamanId) && cocokPegawai(p.pegawaiId)), 'tanggal');
       return {
         judul: 'Laporan Penanaman', file: 'laporan-penanaman',
         kolom: ['Tanggal', 'Tanaman', 'Jenis', 'Lokasi', 'Bibit', 'Penanggung jawab', 'Status'],
@@ -1371,7 +1373,7 @@ function dataLaporan() {
       };
     }
     case 'perkembangan': {
-      const rows = urut(DB.all('laporan').filter(l => cocokTgl(l.tanggal) && l.tanamanNama), 'tanggal');
+      const rows = urut(DB.all('laporan').filter(l => cocokTgl(l.tanggal) && l.tanamanNama && cocokPegawai(l.pegawaiId)), 'tanggal');
       return {
         judul: 'Laporan Perkembangan Tanaman dari Pegawai', file: 'laporan-perkembangan',
         kolom: ['Tanggal', 'Pegawai', 'Tanaman', 'Lokasi', 'Luas (m²)', 'Jumlah ditanam', 'Umur (hari)', 'Status', 'Kegiatan'],
@@ -1379,7 +1381,7 @@ function dataLaporan() {
       };
     }
     case 'panen': {
-      const rows = urut(DB.all('laporan').filter(l=>l.jenis==='Panen' && cocokTgl(l.tanggal)), 'tanggal');
+      const rows = urut(DB.all('laporan').filter(l=>l.jenis==='Panen' && cocokTgl(l.tanggal) && cocokPegawai(l.pegawaiId)), 'tanggal');
       const total = rows.reduce((s,x)=>s+Number(x.panenKg||0),0);
       return {
         judul: 'Laporan Hasil Panen', file: 'laporan-panen',
@@ -1396,7 +1398,7 @@ function dataLaporan() {
         baris: DB.all('barang').map(b => [b.kode, b.nama, b.kategori, b.stok, b.satuan, b.minStok, b.stok <= b.minStok ? 'Menipis' : 'Aman', b.tanggalMasuk || '-', keluarTerakhir(b.id) || '-'])
       };
     case 'keluarmasuk': {
-      const rows = urut(DB.all('transaksi').filter(t => cocokTgl(t.tanggal)), 'tanggal');
+      const rows = urut(DB.all('transaksi').filter(t => cocokTgl(t.tanggal) && cocokPegawai(t.pegawaiId)), 'tanggal');
       return {
         judul: 'Laporan Barang Masuk dan Keluar', file: 'laporan-masuk-keluar',
         kolom: ['Tanggal', 'Barang', 'Jenis', 'Jumlah', 'Satuan', 'Penanaman', 'Keterangan'],
@@ -1408,14 +1410,44 @@ function dataLaporan() {
       };
     }
     case 'aktivitas': {
-      const rows = urut(DB.all('laporan').filter(l => cocokTgl(l.tanggal)), 'tanggal');
+      const rows = urut(DB.all('laporan').filter(l => cocokTgl(l.tanggal) && cocokPegawai(l.pegawaiId)), 'tanggal');
       return {
         judul: 'Laporan Aktivitas Pegawai', file: 'laporan-aktivitas',
         kolom: ['Tanggal', 'Pegawai', 'Jenis kegiatan', 'Lokasi', 'Deskripsi'],
         baris: rows.map(l => [l.tanggal, namaPegawai(l.pegawaiId), l.jenis, l.lokasi, l.deskripsi])
       };
     }
+    case 'progres': {
+      const rows = urut(DB.all('progresLahan').filter(p => cocokTgl(p.tanggal) && cocokPegawai(p.pegawaiId)), 'tanggal');
+      return {
+        judul: 'Laporan Progres Pekerjaan Lahan', file: 'laporan-progres-lahan',
+        kolom: ['Tanggal','Pegawai','Lahan','Pekerjaan','Catatan','Hasil','Kendala','Status'],
+        baris: rows.map(p => {
+          const a=DB.get('penugasanLahan',p.penugasanId),t=a?DB.get('pekerjaanLahan',a.pekerjaanId):null,l=t?DB.get('lahan',t.lahanId):null;
+          return [p.tanggal,namaPegawai(p.pegawaiId),l?.nama||'-',t?.judul||'-',p.catatan,p.hasil||'-',p.kendala||'-',labelStatusPenugasan(p.status)];
+        })
+      };
+    }
   }
+}
+
+function setPeriodeLaporan(periode) {
+  const now=new Date();
+  const toIso=d=>fmt(d);
+  const start=new Date(now),end=new Date(now);
+  if(periode==='minggu'){
+    const offset=(now.getDay()+6)%7;
+    start.setDate(now.getDate()-offset);
+    end.setDate(start.getDate()+6);
+  }else if(periode==='bulan'){
+    start.setDate(1);
+    end.setMonth(now.getMonth()+1,0);
+  }else if(periode==='tahun'){
+    start.setMonth(0,1);
+    end.setMonth(11,31);
+  }else return;
+  LAP.dari=toIso(start);LAP.sampai=toIso(end);LAP.bulan='';LAP.tahun='';
+  render();
 }
 
 function pageLaporan() {
@@ -1437,6 +1469,10 @@ function pageLaporan() {
         <label>Bulan<input type="month" data-lap="bulan" value="${LAP.bulan}"></label>
         <label>Tahun<input type="number" data-lap="tahun" placeholder="2026" value="${LAP.tahun}"></label>
         <label>Jenis tanaman<select data-lap="jenisTanaman"><option value="">Semua</option>${opsiJenis}</select></label>
+        <label>Pegawai<select data-lap="pegawaiId"><option value="">Semua pegawai</option>${DB.all('pegawai').map(p=>`<option value="${p.id}" ${String(LAP.pegawaiId)===String(p.id)?'selected':''}>${esc(p.nama)}</option>`).join('')}</select></label>
+        <button class="btn ghost" data-act="lapPeriode" data-periode="minggu">Minggu ini</button>
+        <button class="btn ghost" data-act="lapPeriode" data-periode="bulan">Bulan ini</button>
+        <button class="btn ghost" data-act="lapPeriode" data-periode="tahun">Tahun ini</button>
         <button class="btn ghost" data-act="resetLap">Reset filter</button>
       </div>
       <div class="card print-area">
@@ -2251,6 +2287,7 @@ function aksiKlik(e) {
     case 'csv': return unduhCSV(LAP_DATA);
     case 'cetak': return window.print();
     case 'resetLap': LAP = { ...LAP_DEFAULT }; return render();
+    case 'lapPeriode': return setPeriodeLaporan(b.dataset.periode);
   }
 }
 
