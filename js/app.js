@@ -1778,8 +1778,12 @@ function bukaFormTugas() {
     if (!data.target) return 'Pilih pegawai atau kelompok penerima tugas.';
     if (data.tenggat && data.tenggat < data.tanggalMulai) return 'Tenggat tidak boleh sebelum tanggal mulai.';
     const [tipe, id] = data.target.split(':');
-    const pegawaiId = tipe === 'pegawai' ? id : null;
-    const kelompokId = tipe === 'kelompok' ? id : null;
+    const targetRow = tipe === 'pegawai'
+      ? staff.find(p => String(p.id) === id)
+      : groups.find(g => String(g.id) === id);
+    if (!targetRow) return 'Penerima tugas tidak ditemukan. Silakan pilih ulang.';
+    const pegawaiId = tipe === 'pegawai' ? targetRow.id : null;
+    const kelompokId = tipe === 'kelompok' ? targetRow.id : null;
     await DB.add('tugasKelompok', {
       pegawaiId, kelompokId, judul: data.judul.trim(),
       deskripsi: data.deskripsi || '', jenis: data.jenis || 'Perawatan',
