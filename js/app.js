@@ -1977,13 +1977,17 @@ function pageProgresLahan() {
 }
 async function reviewProgresLahan(id,status) {
   if(!isAdmin())return;
+  if(!['diterima','perlu_perbaikan'].includes(status))return alert('Status pemeriksaan tidak valid.');
   const p=DB.get('progresLahan',id);if(!p)return;
+  if(p.status!=='menunggu_verifikasi')return alert('Progres ini sudah diperiksa atau tidak lagi menunggu pemeriksaan.');
   const note=prompt(status==='diterima'?'Catatan penerimaan (opsional):':'Apa yang perlu diperbaiki?');
   if(note===null)return;
   if(status==='perlu_perbaikan'&&!note.trim())return alert('Catatan perbaikan wajib diisi.');
   try{
-    await DB.update('progresLahan',id,{status,catatanAdmin:note, diperiksaOleh:me().authId,diperiksaAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
-    await DB.update('penugasanLahan',p.penugasanId,{status:status==='diterima'?'diterima':'perlu_perbaikan',catatanAdmin:note,diverifikasiOleh:me().authId,diverifikasiAt:new Date().toISOString()});
+    const {error}=await supabaseClient.rpc('admin_periksa_progres_lahan',{
+      p_progres_id:Number(id),p_status:status,p_catatan_admin:note||''
+    });
+    if(error)throw error;
     await DB.init(true);render();
   }catch(e){alert('Gagal memeriksa progres: '+e.message);}
 }
