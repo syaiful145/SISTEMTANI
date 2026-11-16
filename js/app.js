@@ -1612,7 +1612,7 @@ async function resetPasswordPegawai(id) {
   const temporaryPassword = buatPasswordSementara();
 
   try {
-    const { data, error } = await supabaseClient.functions.invoke('admin-riset-passworda', {
+    const { data, error } = await supabaseClient.functions.invoke('admin-riset-password', {
       body: { pegawaiId: id, temporaryPassword }
     });
 
