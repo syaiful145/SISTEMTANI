@@ -1965,6 +1965,7 @@ function aksiKlik(e) {
     case 'buatKelompok': return buatKelompok();
     case 'tambahAnggotaKelompok': return tambahAnggotaKelompok(Number(b.dataset.id));
     case 'buatTugasKelompok': return buatTugasKelompok(Number(b.dataset.id));
+    case 'buatTugasPerorangan': return buatTugasPerorangan();
     case 'catatAktivitasTugas': return catatAktivitasTugas(Number(b.dataset.id));
     case 'ajukanSelesaiTugas': return ajukanSelesaiTugas(Number(b.dataset.id));
     case 'verifikasiTugas': return verifikasiTugas(Number(b.dataset.id), b.dataset.status);
