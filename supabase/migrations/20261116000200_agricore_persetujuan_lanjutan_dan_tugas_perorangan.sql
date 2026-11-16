@@ -154,7 +154,8 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, auth
-AS $$1BEGIN
+AS $
+BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'Silakan masuk kembali.';
   END IF;
