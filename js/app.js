@@ -1934,9 +1934,24 @@ function kartuPekerjaanLahan(t,assignment=null) {
     '<p class="muted">'+esc(land?.nama||'Lahan')+' · '+esc(t.jenis)+' · '+tgl(t.tanggal)+' · '+esc(waktuTugas(t))+'</p>'+
     (t.instruksi?'<p>'+esc(t.instruksi)+'</p>':'')+
     (assignment&&assignment.status==='perlu_perbaikan'?'<p class="text-red">Catatan Admin: '+esc(assignment.catatanAdmin||'Silakan perbaiki progres.')+'</p>':'')+
-    '<div class="row-actions">'+action+'</div>'+
+    '<div class="row-actions">'+action+(isAdminUtama()?'<button class="btn tiny danger" data-act="hapusPekerjaanLahan" data-id="'+esc(t.id)+'">Hapus pekerjaan</button>':'')+'</div>'+
     (isAdmin()?'<p class="muted">'+recipients.length+' penerima · '+(t.penerimaMode==='semua'?'Semua anggota saat dibuat':'Pegawai pilihan')+' · '+esc(recipients.join(', '))+'</p>':'')+
     '</article>';
+}
+async function hapusPekerjaanLahan(id) {
+  if (!isAdminUtama()) return alert('Hanya Admin Utama yang boleh menghapus pekerjaan.');
+  const task = DB.get('pekerjaanLahan', id);
+  if (!task) return;
+  const penerima = DB.all('penugasanLahan').filter(x => String(x.pekerjaanId) === String(id)).length;
+  if (!confirm('Hapus pekerjaan "' + task.judul + '" beserta ' + penerima + ' penugasan dan seluruh progresnya? Tindakan ini tidak dapat dibatalkan.')) return;
+  try {
+    await DB.remove('pekerjaanLahan', id);
+    await catat('Hapus pekerjaan lahan', 'Pekerjaan #' + id + ' · ' + task.judul);
+    await DB.init(true);
+    render();
+  } catch (err) {
+    alert('Gagal menghapus pekerjaan: ' + err.message);
+  }
 }
 function pagePekerjaanLahan() {
   if(isAdmin()){
@@ -2250,6 +2265,7 @@ function aksiKlik(e) {
     case 'tambahAnggotaLahan': return tambahAnggotaLahan(id);
     case 'keluarkanAnggotaLahan': return keluarkanAnggotaLahan(id);
     case 'buatPekerjaanLahan': return buatPekerjaanLahan(id);
+    case 'hapusPekerjaanLahan': return hapusPekerjaanLahan(id);
     case 'catatProgresLahan': return catatProgresLahan(id);
     case 'reviewProgresLahan': return reviewProgresLahan(id,b.dataset.status);
     case 'detailPegawai': return detailPegawai(id);
