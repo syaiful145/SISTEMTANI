@@ -80,8 +80,8 @@ const MENU = [
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
   { id: 'pupuk', label: 'Gudang', icon: '📦', akses: 'gudang' },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
-  { id: 'kelompok', label: 'Kelompok Kerja', pegawaiLabel: 'Tugas Saya', icon: '👥' },
-  { id: 'aktivitas', label: 'Pekerjaan Lapangan', pegawaiLabel: 'Laporan Kegiatan', icon: '📝' },
+  { id: 'pekerjaan', label: 'Jadwal & Pekerjaan', pegawaiLabel: 'Pekerjaan Hari Ini', icon: '📋' },
+  { id: 'progres', label: 'Pemeriksaan Progres', pegawaiLabel: 'Catatan Progres', icon: '📝' },
   { id: 'absensi', label: 'Absensi', icon: '🕒' },
   { id: 'laporan', label: 'Laporan', icon: '📊', adminOnly: true },
   { id: 'kalender', label: 'Kalender', icon: '📅' },
@@ -93,7 +93,7 @@ const MENU = [
 const NAV_GROUPS = {
   admin: [
     { label: 'Kepegawaian', ids: ['pegawai', 'absensi'] },
-    { label: 'Operasional', ids: ['kelompok', 'aktivitas', 'kalender'] },
+    { label: 'Operasional Lahan', ids: ['pekerjaan', 'progres', 'kalender'] },
     { label: 'Pertanian', ids: ['lahan', 'tanaman', 'penanaman', 'panen'] },
     { label: 'Persediaan', ids: ['pupuk'] },
     { label: 'Laporan', ids: ['laporan'] },
@@ -101,7 +101,7 @@ const NAV_GROUPS = {
     { label: 'Pengaturan', ids: ['profil', 'admins'] }
   ],
   pegawai: [
-    { label: 'Kegiatan Pertanian', ids: ['tanaman', 'penanaman', 'panen', 'aktivitas'] }
+    { label: 'Kegiatan Pertanian', ids: ['tanaman', 'penanaman', 'panen'] }
   ]
 };
 
@@ -139,7 +139,8 @@ function renderNav(r) {
     NAV_GROUPS.admin.forEach(group => { html += groupHtml(group); });
   } else {
     html += link('lahanSaya');
-    html += link('kelompok');
+    html += link('pekerjaan');
+    html += link('progres');
     html += link('absensi');
     html += groupHtml(NAV_GROUPS.pegawai[0]);
     html += link('pupuk');
@@ -385,7 +386,7 @@ function detailLahan(id) {
   const crops=[...new Set(plantReports.map(l=>l.tanamanNama).filter(Boolean))];
   const rows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
   openInfo('Detail Lahan · '+esc(land.nama),
-    '<section class="card"><div class="page-head"><h3>Anggota Lahan ('+memberships.filter(m=>m.status==='aktif').length+' aktif)</h3>'+(isAdmin()?'<button class="btn" data-act="tambahAnggotaLahan" data-id="'+id+'">+ Tambah Pegawai</button>':'')+'</div>'+tabel(['Pegawai','Mulai','Status','Tindakan'],memberships.map(m=>[esc(namaPegawai(m.pegawaiId)),tgl(m.tanggalMulai),m.status==='aktif'?'<span class="tag green">Aktif</span>':'<span class="tag">Nonaktif</span>',isAdmin()&&m.status==='aktif'?'<button class="btn tiny ghost" data-act="keluarkanAnggotaLahan" data-id="'+m.id+'">Nonaktifkan</button>':'-']),'Belum ada pegawai yang ditugaskan ke lahan ini.')+'</section>'+
+    '<section class="card"><div class="page-head"><h3>Anggota Lahan ('+memberships.filter(m=>m.status==='aktif').length+' aktif)</h3>'+(isAdmin()?'<div class="page-actions"><button class="btn ghost" data-act="tambahAnggotaLahan" data-id="'+id+'">+ Tambah Pegawai</button><button class="btn" data-act="buatPekerjaanLahan" data-id="'+id+'">+ Buat Pekerjaan</button></div>':'')+'</div>'+tabel(['Pegawai','Mulai','Status','Tindakan'],memberships.map(m=>[esc(namaPegawai(m.pegawaiId)),tgl(m.tanggalMulai),m.status==='aktif'?'<span class="tag green">Aktif</span>':'<span class="tag">Nonaktif</span>',isAdmin()&&m.status==='aktif'?'<button class="btn tiny ghost" data-act="keluarkanAnggotaLahan" data-id="'+m.id+'">Nonaktifkan</button>':'-']),'Belum ada pegawai yang ditugaskan ke lahan ini.')+'</section>'+
     '<div class="detail-grid">'+
     '<p><strong>Nama lahan</strong><br>'+esc(land.nama)+'</p>'+
     '<p><strong>Lokasi</strong><br>'+esc(land.lokasi||'-')+'</p>'+
@@ -1795,6 +1796,130 @@ function barisTugas(t,logs) {
     '<div class="muted">'+logs.filter(l=>String(l.tugasId)===String(t.id)).length+' catatan progres</div>'
   ];
 }
+function labelStatusPenugasan(status) {
+  return ({berjalan:'Berjalan',menunggu_verifikasi:'Menunggu pemeriksaan',diterima:'Diterima',perlu_perbaikan:'Perlu perbaikan',dibatalkan:'Dibatalkan'})[status]||status||'-';
+}
+function waktuTugas(t) {
+  return [t.jamMulai,t.jamSelesai].filter(Boolean).map(x=>String(x).slice(0,5)).join('–')||'Waktu fleksibel';
+}
+async function buatPekerjaanLahan(lahanId) {
+  if(!isAdmin())return;
+  const lahan=DB.get('lahan',lahanId);if(!lahan)return;
+  const members=DB.all('anggotaLahan').filter(m=>String(m.lahanId)===String(lahanId)&&m.status==='aktif')
+    .map(m=>DB.get('pegawai',m.pegawaiId)).filter(p=>p&&p.statusVerifikasi==='disetujui');
+  if(!members.length)return alert('Tambahkan pegawai aktif ke lahan ini sebelum membuat pekerjaan.');
+  const fields=[
+    {name:'judul',label:'Nama pekerjaan',req:true},
+    {name:'jenis',label:'Jenis pekerjaan',type:'select',options:['Penyiraman','Pemupukan','Patroli','Penanaman','Pembersihan','Perawatan','Panen','Lainnya'],req:true},
+    {name:'instruksi',label:'Instruksi pekerjaan',type:'textarea',full:true},
+    {name:'tanggal',label:'Tanggal pekerjaan',type:'date',req:true,def:hariIni()},
+    {name:'jamMulai',label:'Jam mulai',type:'time'},
+    {name:'jamSelesai',label:'Jam selesai',type:'time'},
+    {name:'tenggat',label:'Batas penyelesaian (opsional)',type:'date'},
+    {name:'penerimaMode',label:'Penerima pekerjaan',type:'select',options:[['semua','Semua anggota lahan'],['tertentu','Pilih pegawai tertentu']],req:true,def:'semua'},
+    {name:'pegawaiIds',label:'Pegawai tertentu (dipakai jika memilih Pilih pegawai tertentu)',type:'checks',full:true,options:members.map(p=>[String(p.id),p.nama])}
+  ];
+  openModal('Buat Pekerjaan · '+lahan.nama,fields,{tanggal:hariIni(),penerimaMode:'semua'},async data=>{
+    if(data.jamMulai&&data.jamSelesai&&data.jamSelesai<=data.jamMulai)return 'Jam selesai harus setelah jam mulai.';
+    if(data.tenggat&&data.tenggat<data.tanggal)return 'Batas penyelesaian tidak boleh sebelum tanggal pekerjaan.';
+    const ids=(data.pegawaiIds||[]).map(Number);
+    if(data.penerimaMode==='tertentu'&&!ids.length)return 'Pilih setidaknya satu pegawai.';
+    const {error}=await supabaseClient.rpc('admin_buat_pekerjaan_lahan',{
+      p_lahan_id:Number(lahanId),p_judul:data.judul,p_instruksi:data.instruksi||'',p_jenis:data.jenis,
+      p_tanggal:data.tanggal,p_jam_mulai:data.jamMulai||null,p_jam_selesai:data.jamSelesai||null,
+      p_tenggat:data.tenggat||null,p_penerima_mode:data.penerimaMode,p_pegawai_ids:data.penerimaMode==='tertentu'?ids:null
+    });
+    if(error)throw error;
+    await DB.init(true);
+    return null;
+  });
+}
+function kartuPekerjaanLahan(t,assignment=null) {
+  const land=DB.get('lahan',t.lahanId);
+  const status=assignment?assignment.status:t.status;
+  const logs=DB.all('progresLahan').filter(p=>assignment?String(p.penugasanId)===String(assignment.id):false);
+  const action=assignment&&(status==='berjalan'||status==='perlu_perbaikan')
+    ?'<button class="btn tiny" data-act="catatProgresLahan" data-id="'+assignment.id+'">Catat progres</button>'
+    : '';
+  return '<article class="task-visual-card"><div class="task-visual-title"><strong>'+esc(t.judul)+'</strong><span class="tag">'+esc(labelStatusPenugasan(status))+'</span></div>'+
+    '<p class="muted">'+esc(land?.nama||'Lahan')+' · '+esc(t.jenis)+' · '+tgl(t.tanggal)+' · '+esc(waktuTugas(t))+'</p>'+
+    (t.instruksi?'<p>'+esc(t.instruksi)+'</p>':'')+
+    (assignment&&assignment.status==='perlu_perbaikan'?'<p class="text-red">Catatan Admin: '+esc(assignment.catatanAdmin||'Silakan perbaiki progres.')+'</p>':'')+
+    '<div class="row-actions">'+action+'</div>'+
+    (isAdmin()?'<p class="muted">'+DB.all('penugasanLahan').filter(a=>String(a.pekerjaanId)===String(t.id)).length+' penerima · '+(t.penerimaMode==='semua'?'Semua anggota saat dibuat':'Pegawai pilihan')+'</p>':'')+
+    '</article>';
+}
+function pagePekerjaanLahan() {
+  if(isAdmin()){
+    const tasks=DB.all('pekerjaanLahan').slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))||String(b.createdAt).localeCompare(String(a.createdAt)));
+    const assignments=DB.all('penugasanLahan');
+    const pending=assignments.filter(a=>a.status==='menunggu_verifikasi').length;
+    return {html:head('Jadwal & Pekerjaan','<a class="btn ghost" href="#lahan">Kelola Lahan</a>')+
+      '<div class="stats"><div class="stat"><span>Total pekerjaan</span><strong>'+tasks.length+'</strong></div><div class="stat"><span>Penugasan aktif</span><strong>'+assignments.filter(a=>a.status==='berjalan').length+'</strong></div><div class="stat"><span>Menunggu pemeriksaan</span><strong>'+pending+'</strong></div></div>'+
+      (tasks.map(t=>kartuPekerjaanLahan(t)).join('')||'<div class="empty">Belum ada pekerjaan. Buka Detail pada salah satu lahan untuk membuat jadwal pekerjaan.</div>')};
+  }
+  const mine=DB.all('penugasanLahan').filter(a=>String(a.pegawaiId)===String(me().id));
+  const tasks=mine.map(a=>({a,t:DB.get('pekerjaanLahan',a.pekerjaanId)})).filter(x=>x.t)
+    .sort((a,b)=>String(a.t.tanggal).localeCompare(String(b.t.tanggal)));
+  const today=tasks.filter(x=>x.t.tanggal===hariIni());
+  const upcoming=tasks.filter(x=>x.t.tanggal>hariIni());
+  const previous=tasks.filter(x=>x.t.tanggal<hariIni());
+  const renderList=(arr)=>arr.map(x=>kartuPekerjaanLahan(x.t,x.a)).join('')||'<p class="muted">Tidak ada pekerjaan pada bagian ini.</p>';
+  return {html:head('Pekerjaan Hari Ini')+'<section class="card"><h3>Hari Ini</h3>'+renderList(today)+'</section>'+
+    (upcoming.length?'<section class="card"><h3>Jadwal Berikutnya</h3>'+renderList(upcoming)+'</section>':'')+
+    (previous.length?'<section class="card"><h3>Riwayat Pekerjaan</h3>'+renderList(previous)+'</section>':'')};
+}
+async function catatProgresLahan(assignmentId) {
+  if(isAdmin())return;
+  const a=DB.get('penugasanLahan',assignmentId);if(!a||String(a.pegawaiId)!==String(me().id))return;
+  if(!['berjalan','perlu_perbaikan'].includes(a.status))return alert('Pekerjaan ini tidak sedang menunggu catatan progres.');
+  const existing=DB.all('progresLahan').find(p=>String(p.penugasanId)===String(a.id)&&p.tanggal===hariIni());
+  openModal('Catatan Progres Harian',[
+    {name:'catatan',label:'Apa yang dikerjakan hari ini?',type:'textarea',req:true,full:true},
+    {name:'hasil',label:'Hasil pekerjaan',type:'textarea',full:true},
+    {name:'kendala',label:'Kendala (jika ada)',type:'textarea',full:true}
+  ],existing||{},async data=>{
+    const {error}=await supabaseClient.rpc('pegawai_kirim_progres_lahan',{
+      p_penugasan_id:Number(assignmentId),p_tanggal:hariIni(),p_catatan:data.catatan,p_hasil:data.hasil||'',p_kendala:data.kendala||''
+    });
+    if(error)throw error;
+    await DB.init(false);
+    return null;
+  });
+}
+function pageProgresLahan() {
+  const rows=DB.all('progresLahan').slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal))||b.id-a.id);
+  if(isAdmin()){
+    const pending=rows.filter(p=>p.status==='menunggu_verifikasi');
+    return {html:head('Pemeriksaan Progres')+'<div class="stats"><div class="stat"><span>Menunggu pemeriksaan</span><strong>'+pending.length+'</strong></div><div class="stat"><span>Sudah diterima</span><strong>'+rows.filter(p=>p.status==='diterima').length+'</strong></div><div class="stat"><span>Perlu perbaikan</span><strong>'+rows.filter(p=>p.status==='perlu_perbaikan').length+'</strong></div></div>'+
+      (pending.map(p=>{
+        const a=DB.get('penugasanLahan',p.penugasanId),t=a?DB.get('pekerjaanLahan',a.pekerjaanId):null;
+        return '<section class="card"><div class="page-head"><h3>'+esc(t?.judul||'Pekerjaan')+'</h3><span class="tag amber">Menunggu pemeriksaan</span></div>'+
+          '<p><strong>Pegawai:</strong> '+esc(namaPegawai(p.pegawaiId))+' · '+tgl(p.tanggal)+'</p>'+
+          '<p><strong>Catatan:</strong> '+esc(p.catatan)+'</p><p><strong>Hasil:</strong> '+esc(p.hasil||'-')+'</p><p><strong>Kendala:</strong> '+esc(p.kendala||'-')+'</p>'+
+          '<div class="row-actions"><button class="btn tiny" data-act="reviewProgresLahan" data-id="'+p.id+'" data-status="diterima">Terima progres</button><button class="btn tiny ghost" data-act="reviewProgresLahan" data-id="'+p.id+'" data-status="perlu_perbaikan">Minta perbaikan</button></div></section>';
+      }).join('')||'<div class="empty">Belum ada progres yang menunggu pemeriksaan.</div>')};
+  }
+  const own=rows.filter(p=>String(p.pegawaiId)===String(me().id));
+  return {html:head('Catatan Progres')+(own.map(p=>{
+    const a=DB.get('penugasanLahan',p.penugasanId),t=a?DB.get('pekerjaanLahan',a.pekerjaanId):null;
+    return '<section class="card"><div class="page-head"><h3>'+esc(t?.judul||'Pekerjaan')+'</h3><span class="tag">'+esc(labelStatusPenugasan(p.status))+'</span></div>'+
+      '<p class="muted">'+tgl(p.tanggal)+'</p><p>'+esc(p.catatan)+'</p>'+(p.catatanAdmin?'<p class="text-red">Catatan Admin: '+esc(p.catatanAdmin)+'</p>':'')+'</section>';
+  }).join('')||'<div class="empty">Belum ada catatan progres.</div>')};
+}
+async function reviewProgresLahan(id,status) {
+  if(!isAdmin())return;
+  const p=DB.get('progresLahan',id);if(!p)return;
+  const note=prompt(status==='diterima'?'Catatan penerimaan (opsional):':'Apa yang perlu diperbaiki?');
+  if(note===null)return;
+  if(status==='perlu_perbaikan'&&!note.trim())return alert('Catatan perbaikan wajib diisi.');
+  try{
+    await DB.update('progresLahan',id,{status,catatanAdmin:note, diperiksaOleh:me().authId,diperiksaAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+    await DB.update('penugasanLahan',p.penugasanId,{status:status==='diterima'?'diterima':'perlu_perbaikan',catatanAdmin:note,diverifikasiOleh:me().authId,diverifikasiAt:new Date().toISOString()});
+    await DB.init(true);render();
+  }catch(e){alert('Gagal memeriksa progres: '+e.message);}
+}
+
 function pageKelompok() {
   const groups = DB.all('kelompok').slice().sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
   const members = DB.all('anggotaKelompok');
@@ -1892,6 +2017,8 @@ const PAGES = {
   dashboard: pageDashboard,
   lahan: () => ({ html: crud('lahan', cfgLahan()) }),
   lahanSaya: pageLahanSaya,
+  pekerjaan: pagePekerjaanLahan,
+  progres: pageProgresLahan,
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
   penanaman: () => pagePekerjaan('Penanaman'),
   panen: () => pagePekerjaan('Panen'),
@@ -2028,6 +2155,9 @@ function aksiKlik(e) {
     case 'detailLahan': return detailLahan(id);
     case 'tambahAnggotaLahan': return tambahAnggotaLahan(id);
     case 'keluarkanAnggotaLahan': return keluarkanAnggotaLahan(id);
+    case 'buatPekerjaanLahan': return buatPekerjaanLahan(id);
+    case 'catatProgresLahan': return catatProgresLahan(id);
+    case 'reviewProgresLahan': return reviewProgresLahan(id,b.dataset.status);
     case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
     case 'resetPasswordPegawai': return resetPasswordPegawai(id);
