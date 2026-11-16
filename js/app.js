@@ -1819,7 +1819,7 @@ function pageKelompok() {
     : 'Semua tugas untuk kamu, baik tugas pribadi maupun tugas kelompok, ditampilkan di sini. Catat progres saat bekerja dan ajukan pemeriksaan setelah selesai.';
   return {
     html: head(isAdmin() ? 'Tugas & Kelompok Kerja' : 'Tugas Saya', isAdmin()
-      ? '<button class="btn ghost" data-act="buatKelompok">+ Kelola Kelompok</button><button class="btn" data-act="buatTugasTerpadu">+ Buat Tugas</button>'
+      ? '<button class="btn" data-act="buatTugasTerpadu">+ Buat Tugas</button>'
       : '') +
       '<p class="muted">'+intro+'</p>'+
       '<div class="stats"><div class="stat"><span>Tugas aktif</span><strong>'+active+'</strong></div><div class="stat"><span>Menunggu pemeriksaan/keputusan</span><strong>'+waiting+'</strong></div><div class="stat"><span>Individu · Kelompok</span><strong>'+personal+' · '+groupTaskCount+'</strong></div></div>'+
