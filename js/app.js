@@ -1813,7 +1813,18 @@ function pageKelompok() {
   const groupTaskCount = visibleTasks.filter(t=>!!t.kelompokId).length;
   const active = visibleTasks.filter(t=>t.status==='berjalan').length;
   const waiting = visibleTasks.filter(t=>t.status==='menunggu_verifikasi'||t.status==='menunggu_persetujuan_lanjut').length;
-  const taskRows = visibleTasks.map(t=>barisTugas(t,logs));
+  const taskCards = visibleTasks.map(t => {
+    const tujuan = t.kelompokId
+      ? 'Kelompok · ' + (DB.get('kelompok',t.kelompokId)?.nama || 'Kelompok')
+      : 'Individu · ' + namaPegawai(t.pegawaiId);
+    const jumlahLog = logs.filter(l=>String(l.tugasId)===String(t.id)).length;
+    return '<article class="task-visual-card">' +
+      '<div class="task-visual-main"><div class="task-visual-title"><h4>'+esc(t.judul)+'</h4>'+tagStatus(labelStatusTugas(t.status))+'</div>' +
+      '<p class="task-visual-instruction">'+esc(t.deskripsi || 'Tidak ada instruksi tambahan.')+'</p>' +
+      '<div class="task-visual-meta"><span>'+esc(t.jenis || 'Pekerjaan')+'</span><span>'+esc(t.lahanNama || 'Tanpa lahan')+'</span><span>'+esc(tujuan)+'</span><span>Tenggat: '+esc(t.tenggat || 'Belum ditentukan')+'</span></div></div>' +
+      '<div class="task-visual-side"><div class="task-visual-progress"><strong>'+jumlahLog+'</strong><span>catatan progres</span></div><div class="row-actions">'+aksiStatusTugas(t)+'</div></div>' +
+      '</article>';
+  }).join('');
   const intro = isAdmin()
     ? 'Buat tugas untuk satu pegawai atau satu kelompok. Kelompok bersifat pilihan, bukan syarat untuk memberi tugas.'
     : 'Semua tugas untuk kamu, baik tugas pribadi maupun tugas kelompok, ditampilkan di sini. Catat progres saat bekerja dan ajukan pemeriksaan setelah selesai.';
@@ -1824,7 +1835,7 @@ function pageKelompok() {
       '<p class="muted">'+intro+'</p>'+
       '<div class="stats"><div class="stat"><span>Tugas aktif</span><strong>'+active+'</strong></div><div class="stat"><span>Menunggu pemeriksaan/keputusan</span><strong>'+waiting+'</strong></div><div class="stat"><span>Individu · Kelompok</span><strong>'+personal+' · '+groupTaskCount+'</strong></div></div>'+
       (isAdmin() && waiting ? '<section class="card"><h3>Perlu Tindakan Admin</h3><p class="muted">'+waiting+' tugas memerlukan pemeriksaan atau keputusan Admin. Gunakan tindakan pada baris tugas.</p></section>' : '')+
-      '<section class="card"><h3>'+ (isAdmin() ? 'Daftar Semua Tugas' : 'Daftar Tugas') +'</h3>'+tabel(['Tugas','Tindakan','Progres'],taskRows,'Belum ada tugas yang ditetapkan.')+'</section>'+
+      '<section class="card task-list-card"><div class="page-head"><div><h3>'+ (isAdmin() ? 'Daftar Semua Tugas' : 'Daftar Tugas Saya') +'</h3><p class="muted">Informasi tugas dan tindakan ditampilkan dalam satu kartu.</p></div></div>'+(taskCards ? '<div class="task-visual-list">'+taskCards+'</div>' : '<div class="empty">Belum ada tugas yang ditetapkan.</div>')+'</section>'+
       (isAdmin() ? '<section class="card"><div class="page-head"><h3>Kelompok Kerja</h3><button class="btn ghost" data-act="buatKelompok">+ Buat Kelompok</button></div><p class="muted">Kelompok hanya digunakan bila Admin memilih penugasan bersama. Tugas individu tidak memerlukan kelompok.</p>'+(groupCards || '<p class="muted">Belum ada kelompok. Admin tetap dapat memberi tugas langsung kepada pegawai.</p>')+'</section>' : (mine.length ? '<section class="card"><h3>Kelompok Saya</h3><p>'+mine.map(g=>esc(g.nama)).join(' · ')+'</p></section>' : ''))
   };
 }
