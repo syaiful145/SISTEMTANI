@@ -123,19 +123,25 @@ function renderNavLink(m, r) {
 function renderNav(r) {
   const visible = MENU.filter(menuVisible);
   const byId = id => visible.find(m => m.id === id);
-  const used = new Set(['dashboard']);
-  const groups = NAV_GROUPS[me()?.tipe] || [];
-  let html = renderNavLink(byId('dashboard'), r);
-
-  groups.forEach(group => {
+  const link = id => byId(id) ? renderNavLink(byId(id), r) : '';
+  const groupHtml = group => {
     const items = group.ids.map(byId).filter(Boolean);
-    if (!items.length) return;
-    items.forEach(item => used.add(item.id));
+    if (!items.length) return '';
     const active = items.some(item => item.id === r);
-    html += `<details class="nav-group"${active ? ' open' : ''}><summary><span>${group.label}</span><span class="nav-chevron" aria-hidden="true">⌄</span></summary><div class="nav-submenu">${items.map(item => renderNavLink(item, r)).join('')}</div></details>`;
-  });
+    return `<details class="nav-group"${active ? ' open' : ''}><summary><span>${group.label}</span><span class="nav-chevron" aria-hidden="true">⌄</span></summary><div class="nav-submenu">${items.map(item => renderNavLink(item, r)).join('')}</div></details>`;
+  };
 
-  visible.filter(m => !used.has(m.id)).forEach(m => { html += renderNavLink(m, r); });
+  let html = link('dashboard');
+  if (me()?.tipe === 'admin') {
+    NAV_GROUPS.admin.forEach(group => { html += groupHtml(group); });
+  } else {
+    html += link('kelompok');
+    html += link('absensi');
+    html += groupHtml(NAV_GROUPS.pegawai[0]);
+    html += link('pupuk');
+    html += link('kalender');
+    html += link('profil');
+  }
   $('#nav').innerHTML = html;
 }
 
