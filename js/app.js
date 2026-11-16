@@ -864,12 +864,10 @@ function gambarGrafik() {
 
 function pagePupuk() {
   const cfg = cfgBarang();
-  cfg.judul = 'Stok Pupuk';
-  cfg.filter = r => String(r.kategori || '').trim().toLowerCase() === 'pupuk';
-  cfg.kosong = 'Belum ada data pupuk. Admin dapat menambahkan pupuk melalui tombol Tambah Barang.';
-  cfg.labelTambah = '+ Tambah Pupuk';
-  const fields = cfg.fields;
-  cfg.fields = isEdit => fields(isEdit).map(f => f.name === 'kategori' ? { ...f, def: 'Pupuk' } : f);
+  cfg.judul = 'Gudang';
+  cfg.kosong = 'Belum ada barang di gudang. Admin dapat menambahkan Bibit, Pupuk, Hasil Panen, atau perlengkapan lainnya.';
+  cfg.labelTambah = '+ Tambah Barang';
+  cfg.catatan = '<p class="muted">Semua persediaan dikelola di satu tempat: Bibit, Pupuk, Hasil Panen, Pestisida, Peralatan pertanian, dan Perlengkapan lainnya. Gunakan tombol Masuk, Keluar, atau Detail pada setiap barang.</p>';
   return { html: crud('barang', cfg) };
 }
 
@@ -1768,7 +1766,7 @@ const PAGES = {
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
   penanaman: () => pagePekerjaan('Penanaman'),
   panen: () => pagePekerjaan('Panen'),
-  gudang: pageGudang,
+  gudang: pagePupuk,
   pupuk: pagePupuk,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
   kelompok: pageKelompok,
