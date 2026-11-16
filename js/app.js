@@ -493,7 +493,6 @@ function cfgPegawai() {
     ],
     fields: isEdit => [
       { name: 'nama', label: 'Nama pegawai', req: true },
-      { name: 'idPegawai', label: 'ID pegawai', req: true },
       { name: 'jabatan', label: 'Jabatan', req: true },
       { name: 'telepon', label: 'Nomor telepon', type: 'tel', req: true },
       { name: 'alamat', label: 'Alamat', type: 'textarea', full: true },
