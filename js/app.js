@@ -311,7 +311,23 @@ function openCrud(tbl, id) {
     if (cfg.olah) cfg.olah(data, lama);
     const err = cfg.validasi ? cfg.validasi(data, lama, id) : null;
     if (err) return err;
-    if (id) await DB.update(tbl, id, data); else await DB.add(tbl, data);
+    if (tbl === 'barang') {
+      const { data: barangId, error } = await supabaseClient.rpc('admin_simpan_barang', {
+        p_id: id ? Number(id) : null,
+        p_kode: data.kode,
+        p_nama: data.nama,
+        p_kategori: data.kategori,
+        p_satuan: data.satuan,
+        p_min_stok: Number(data.minStok),
+        p_stok_awal: id ? 0 : Number(data.stok || 0),
+        p_tanggal_masuk: data.tanggalMasuk || hariIni()
+      });
+      if (error) throw new Error(`Gagal menyimpan barang: ${error.message}`);
+      if (!barangId) throw new Error('Database tidak mengembalikan ID barang.');
+      await DB.init(isAdmin());
+    } else {
+      if (id) await DB.update(tbl, id, data); else await DB.add(tbl, data);
+    }
     await catat(`${id ? 'Ubah' : 'Tambah'} ${cfg.judul}`, cfg.nama({ ...lama, ...data }));
     return null;
   });
@@ -510,14 +526,13 @@ function cfgBarang() {
       { h: 'Tgl masuk', f: r => tgl(r.tanggalMasuk) },
       { h: 'Terakhir keluar', f: r => tgl(keluarTerakhir(r.id)) }
     ],
-    fields: () => [
+    fields: isEdit => [
       { name: 'kode', label: 'Kode barang', req: true },
       { name: 'nama', label: 'Nama barang', req: true },
       { name: 'kategori', label: 'Kategori', type: 'select', options: KATEGORI_BARANG, req: true },
-      { name: 'stok', label: 'Jumlah stok', type: 'number', req: true },
+      ...(!isEdit ? [{ name: 'stok', label: 'Stok awal', type: 'number', req: true }] : []),
       { name: 'satuan', label: 'Satuan (kg, botol, buah, ...)', req: true },
-      { name: 'minStok', label: 'Batas stok menipis', type: 'number', req: true },
-      { name: 'tanggalMasuk', label: 'Tanggal barang masuk', type: 'date', def: hariIni() }
+      { name: 'minStok', label: 'Batas stok menipis', type: 'number', req: true }
     ]
   };
 }
@@ -563,10 +578,16 @@ function openTransaksi(defaults = {}) {
     const b = DB.get('barang', data.barangId);
     if (!b) return 'Barang tidak ditemukan.';
     if (!(data.jumlah > 0)) return 'Jumlah harus lebih dari 0.';
-    const stokBaru = data.jenis === 'Masuk' ? b.stok + data.jumlah : b.stok - data.jumlah;
-    if (stokBaru < 0) return `Stok tidak cukup. Sisa ${rp(b.stok)} ${b.satuan}.`;
-    await DB.update('barang', b.id, data.jenis === 'Masuk' ? { stok: stokBaru, tanggalMasuk: data.tanggal } : { stok: stokBaru });
-    await DB.add('transaksi', { ...data, penanamanId: data.penanamanId || null });
+    const { error } = await supabaseClient.rpc('admin_catat_transaksi_stok', {
+      p_barang_id: Number(b.id),
+      p_jenis: data.jenis,
+      p_jumlah: Number(data.jumlah),
+      p_tanggal: data.tanggal,
+      p_penanaman_id: data.penanamanId ? Number(data.penanamanId) : null,
+      p_keterangan: data.keterangan || null
+    });
+    if (error) return error.message;
+    await DB.init(isAdmin());
     await catat(`Transaksi stok ${data.jenis}`, `${b.nama} ${rp(data.jumlah)} ${b.satuan}`);
     return null;
   });
