@@ -33,7 +33,7 @@ BEGIN
   END IF;
   v_sequence := pg_get_serial_sequence('public.transaksi', 'id');
   IF v_sequence IS NOT NULL THEN
-    EXECUTE format('REVOKE USAGE, SELECT ON SEQUENCE %s FROM authenticated', v_sequence);
+    EXECUTE format('REVOKE USAGE, SELECT ON SEQUENCE %s FROM PUBLIC, anon, authenticated', v_sequence);
   END IF;
 END;
 $$;
