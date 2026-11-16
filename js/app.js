@@ -78,7 +78,8 @@ const MENU = [
   { id: 'tanaman', label: 'Tanaman', icon: '🌿' },
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
-  { id: 'pupuk', label: 'Gudang', icon: '📦', akses: 'gudang' },
+  { id: 'stokBenih', label: 'Stok Benih & Tanaman', icon: '🌱' },
+  { id: 'pupuk', label: 'Gudang Peralatan & Bahan', icon: '📦' },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
   { id: 'pekerjaan', label: 'Jadwal & Pekerjaan', pegawaiLabel: 'Pekerjaan Hari Ini', icon: '📋' },
   { id: 'progres', label: 'Pemeriksaan Progres', pegawaiLabel: 'Catatan Progres', icon: '📝' },
@@ -95,7 +96,7 @@ const NAV_GROUPS = {
     { label: 'Kepegawaian', ids: ['pegawai', 'absensi'] },
     { label: 'Operasional Lahan', ids: ['pekerjaan', 'progres', 'kalender'] },
     { label: 'Pertanian', ids: ['lahan', 'tanaman', 'penanaman', 'panen'] },
-    { label: 'Persediaan', ids: ['pupuk'] },
+    { label: 'Persediaan', ids: ['stokBenih', 'pupuk'] },
     { label: 'Laporan', ids: ['laporan'] },
     { label: 'Notifikasi', ids: ['notifikasi'] },
     { label: 'Pengaturan', ids: ['profil', 'admins'] }
@@ -143,6 +144,7 @@ function renderNav(r) {
     html += link('progres');
     html += link('absensi');
     html += groupHtml(NAV_GROUPS.pegawai[0]);
+    html += link('stokBenih');
     html += link('pupuk');
     html += link('kalender');
     html += link('profil');
@@ -943,6 +945,36 @@ function gambarGrafik() {
       }
     }
   });
+}
+
+function pageStokBenih() {
+  const seeds=DB.all('barang').filter(b=>String(b.kategori||'').toLowerCase()==='bibit')
+    .slice().sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
+  const plants=DB.all('tanaman').filter(t=>t.status!=='Selesai')
+    .slice().sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
+  const seedRows=seeds.map(b=>[
+    '<strong>'+esc(b.nama)+'</strong><div class="muted">'+esc(b.kode||'')+'</div>',
+    '<strong class="'+(Number(b.stok)<=Number(b.minStok)?'text-red':'')+'">'+rp(b.stok)+' '+esc(b.satuan||'')+'</strong>',
+    Number(b.stok)<=Number(b.minStok)?'<span class="tag amber">Stok menipis</span>':'<span class="tag green">Tersedia</span>',
+    '<button class="btn tiny ghost" data-act="detailBarang" data-id="'+b.id+'">Detail</button>'
+  ]);
+  const plantRows=plants.map(t=>[
+    '<strong>'+esc(t.nama)+'</strong><div class="muted">'+esc(t.jenis||'-')+'</div>',
+    esc(t.lokasi||'-'),esc(t.status||'-'),tgl(addDays(t.tanggalTanam,t.umurPanen))
+  ]);
+  return {html:head('Stok Benih & Tanaman')+
+    '<p class="muted">Pegawai dapat memeriksa ketersediaan benih dan tanaman aktif langsung di sini. Stok berasal dari data persediaan yang sama dengan gudang.</p>'+
+    '<section class="card"><h3>Stok Benih Tersedia</h3>'+tabel(['Nama benih','Stok tersedia','Kondisi','Detail'],seedRows,'Belum ada data benih. Admin dapat menambahkan benih melalui Gudang Peralatan & Bahan.')+'</section>'+
+    '<section class="card"><h3>Tanaman yang Sedang Dikelola</h3>'+tabel(['Tanaman','Lokasi','Status','Prediksi panen'],plantRows,'Belum ada tanaman aktif.')+'</section>'};
+}
+function pageGudangPeralatan() {
+  const cfg=cfgBarang();
+  cfg.judul='Gudang Peralatan & Bahan';
+  cfg.kosong='Belum ada peralatan atau bahan di gudang.';
+  cfg.labelTambah='+ Tambah Barang';
+  cfg.filter=b=>!['bibit','hasil panen'].includes(String(b.kategori||'').toLowerCase());
+  cfg.catatan='<p class="muted">Persediaan pupuk, pestisida, peralatan, dan perlengkapan. Stok benih ditampilkan terpisah pada menu Stok Benih & Tanaman.</p>';
+  return {html:crud('barang',cfg)};
 }
 
 function pagePupuk() {
@@ -2022,7 +2054,8 @@ const PAGES = {
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
   penanaman: () => pagePekerjaan('Penanaman'),
   panen: () => pagePekerjaan('Panen'),
-  pupuk: pagePupuk,
+  stokBenih: pageStokBenih,
+  pupuk: pageGudangPeralatan,
   pegawai: () => ({ html: crud('pegawai', cfgPegawai()) }),
   kelompok: pageKelompok,
   aktivitas: pageAktivitas,
