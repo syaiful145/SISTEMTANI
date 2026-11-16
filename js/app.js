@@ -74,6 +74,7 @@ const catat = (aksi, entitas) => { const u = me(); return DB.log(u ? u.key : 'si
 const MENU = [
   { id: 'dashboard', label: 'Dashboard', pegawaiLabel: 'Beranda', icon: '🏠' },
   { id: 'lahan', label: 'Data Lahan', icon: '🗺️', adminOnly: true },
+  { id: 'lahanSaya', label: 'Lahan Saya', icon: '🗺️', pegawaiOnly: true },
   { id: 'tanaman', label: 'Tanaman', icon: '🌿' },
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
@@ -109,6 +110,7 @@ function menuVisible(m) {
   if (!u) return false;
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
+  if (m.pegawaiOnly) return false;
   if (m.id === 'penanaman' || m.id === 'panen') return true; // Perilaku lama dipertahankan.
   if (m.id === 'pupuk') return Array.isArray(u.akses) && u.akses.includes('gudang');
   return !m.akses || (Array.isArray(u.akses) && u.akses.includes(m.akses));
@@ -137,6 +139,7 @@ function renderNav(r) {
   if (me()?.tipe === 'admin') {
     NAV_GROUPS.admin.forEach(group => { html += groupHtml(group); });
   } else {
+    html += link('lahanSaya');
     html += link('kelompok');
     html += link('absensi');
     html += groupHtml(NAV_GROUPS.pegawai[0]);
@@ -337,15 +340,53 @@ function cfgLahan() {
   };
 }
 
+async function tambahAnggotaLahan(lahanId) {
+  if(!isAdmin())return;
+  const lahan=DB.get('lahan',lahanId);if(!lahan)return;
+  const aktif=DB.all('anggotaLahan').filter(m=>String(m.lahanId)===String(lahanId)&&m.status==='aktif');
+  const available=DB.all('pegawai').filter(p=>p.statusVerifikasi==='disetujui'&&!aktif.some(m=>String(m.pegawaiId)===String(p.id)));
+  if(!available.length)return alert('Semua pegawai aktif sudah terdaftar di lahan ini.');
+  openModal('Tambah Anggota · '+lahan.nama,[
+    {name:'pegawaiId',label:'Pilih pegawai',type:'select',num:true,req:true,options:available.map(p=>[p.id,p.nama+' · '+(p.jabatan||'Pegawai')])},
+    {name:'tanggalMulai',label:'Mulai bertugas',type:'date',req:true,def:hariIni()},
+    {name:'catatan',label:'Catatan (opsional)',type:'textarea',full:true}
+  ],{tanggalMulai:hariIni()},async data=>{
+    await DB.add('anggotaLahan',{lahanId:Number(lahanId),pegawaiId:Number(data.pegawaiId),status:'aktif',tanggalMulai:data.tanggalMulai,catatan:data.catatan||''});
+    await DB.init(isAdmin());
+    return null;
+  });
+}
+async function keluarkanAnggotaLahan(id) {
+  if(!isAdmin())return;
+  const member=DB.get('anggotaLahan',id);if(!member||member.status!=='aktif')return;
+  if(!confirm('Nonaktifkan keanggotaan pegawai ini dari lahan? Riwayat tugas dan laporan tidak akan dihapus.'))return;
+  try{
+    await DB.update('anggotaLahan',id,{status:'nonaktif',tanggalSelesai:hariIni(),updatedAt:new Date().toISOString()});
+    await DB.init(isAdmin());render();
+  }catch(e){alert('Gagal memperbarui anggota lahan: '+e.message);}
+}
+function pageLahanSaya() {
+  const mine=DB.all('anggotaLahan').filter(m=>String(m.pegawaiId)===String(me().id)&&m.status==='aktif');
+  const cards=mine.map(m=>{
+    const l=DB.get('lahan',m.lahanId);if(!l||l.aktif===false)return '';
+    return '<section class="card"><div class="page-head"><h3>'+esc(l.nama)+'</h3><span class="tag green">Aktif</span></div>'+
+      '<p><strong>Luas:</strong> '+rp(l.luasTotalM2)+' m²</p><p><strong>Lokasi:</strong> '+esc(l.lokasi||'-')+'</p>'+
+      '<p><strong>Mulai bertugas:</strong> '+tgl(m.tanggalMulai)+'</p><p class="muted">'+esc(l.keterangan||'Belum ada keterangan lahan.')+'</p></section>';
+  }).join('');
+  return {html:head('Lahan Saya')+(cards||'<div class="empty">Kamu belum ditugaskan ke lahan mana pun. Hubungi Admin untuk ditambahkan sebagai anggota lahan.</div>')};
+}
+
 function detailLahan(id) {
   const land=DB.get('lahan',id); if(!land)return;
   const reports=DB.all('laporan').filter(l=>String(l.lahanId)===String(id));
+  const memberships=DB.all('anggotaLahan').filter(m=>String(m.lahanId)===String(id)).sort((a,b)=>String(a.status).localeCompare(String(b.status))||String(a.tanggalMulai).localeCompare(String(b.tanggalMulai)));
   const plantReports=reports.filter(l=>l.jenis==='Penanaman');
   const used=plantReports.filter(l=>l.status==='diterima').reduce((n,l)=>n+Number(l.luasM2||0),0);
   const planted=plantReports.reduce((n,l)=>n+Number(l.jumlahDitanam||0),0);
   const crops=[...new Set(plantReports.map(l=>l.tanamanNama).filter(Boolean))];
   const rows=reports.slice().sort((a,b)=>String(b.tanggal).localeCompare(String(a.tanggal)));
   openInfo('Detail Lahan · '+esc(land.nama),
+    '<section class="card"><div class="page-head"><h3>Anggota Lahan ('+memberships.filter(m=>m.status==='aktif').length+' aktif)</h3>'+(isAdmin()?'<button class="btn" data-act="tambahAnggotaLahan" data-id="'+id+'">+ Tambah Pegawai</button>':'')+'</div>'+tabel(['Pegawai','Mulai','Status','Tindakan'],memberships.map(m=>[esc(namaPegawai(m.pegawaiId)),tgl(m.tanggalMulai),m.status==='aktif'?'<span class="tag green">Aktif</span>':'<span class="tag">Nonaktif</span>',isAdmin()&&m.status==='aktif'?'<button class="btn tiny ghost" data-act="keluarkanAnggotaLahan" data-id="'+m.id+'">Nonaktifkan</button>':'-']),'Belum ada pegawai yang ditugaskan ke lahan ini.')+'</section>'+
     '<div class="detail-grid">'+
     '<p><strong>Nama lahan</strong><br>'+esc(land.nama)+'</p>'+
     '<p><strong>Lokasi</strong><br>'+esc(land.lokasi||'-')+'</p>'+
@@ -1851,6 +1892,7 @@ async function verifikasiTugas(tugasId,status){
 const PAGES = {
   dashboard: pageDashboard,
   lahan: () => ({ html: crud('lahan', cfgLahan()) }),
+  lahanSaya: pageLahanSaya,
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
   penanaman: () => pagePekerjaan('Penanaman'),
   panen: () => pagePekerjaan('Panen'),
@@ -1985,6 +2027,8 @@ function aksiKlik(e) {
     case 'hapusLaporan': return hapusLaporanAdmin(id);
     case 'hapusRiwayat': return hapusRiwayatAdmin(b.dataset.tbl,id);
     case 'detailLahan': return detailLahan(id);
+    case 'tambahAnggotaLahan': return tambahAnggotaLahan(id);
+    case 'keluarkanAnggotaLahan': return keluarkanAnggotaLahan(id);
     case 'detailPegawai': return detailPegawai(id);
     case 'riwayat': return riwayatPegawai(id);
     case 'resetPasswordPegawai': return resetPasswordPegawai(id);
