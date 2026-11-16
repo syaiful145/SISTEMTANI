@@ -78,7 +78,6 @@ const MENU = [
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
   { id: 'gudang', label: 'Gudang', icon: '📦', akses: 'gudang' },
-  { id: 'pupuk', label: 'Stok Pupuk', icon: '🧪', adminOnly: true },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
   { id: 'kelompok', label: 'Kelompok Kerja', icon: '👥' },
   { id: 'aktivitas', label: 'Pekerjaan Lapangan', icon: '📝' },
