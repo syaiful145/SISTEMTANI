@@ -154,7 +154,7 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, auth
-AS $
+AS $$
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'Silakan masuk kembali.';
@@ -184,7 +184,7 @@ BEGIN
     RAISE EXCEPTION 'Tugas tidak ditemukan, bukan tugas Anda, atau statusnya bukan Berjalan.';
   END IF;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.pegawai_ajukan_selesai_tugas_kelompok(bigint) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.pegawai_ajukan_selesai_tugas_kelompok(bigint) TO authenticated;
