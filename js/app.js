@@ -70,39 +70,73 @@ const isAdmin = () => me()?.tipe === 'admin';
 const bisa = fitur => { const u = me(); return !!u && (u.tipe === 'admin' || u.akses.includes(fitur)); };
 const catat = (aksi, entitas) => { const u = me(); return DB.log(u ? u.key : 'sistem', u ? u.nama : 'Sistem', aksi, entitas); };
 
-/* ===== Menu ===== */
+/* ===== Menu & navigasi berkelompok ===== */
 const MENU = [
-  { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'dashboard', label: 'Dashboard', pegawaiLabel: 'Beranda', icon: '🏠' },
   { id: 'lahan', label: 'Data Lahan', icon: '🗺️', adminOnly: true },
   { id: 'tanaman', label: 'Tanaman', icon: '🌿' },
   { id: 'penanaman', label: 'Penanaman', icon: '🌱', akses: 'penanaman' },
   { id: 'panen', label: 'Panen', icon: '🧺', akses: 'panen' },
   { id: 'pupuk', label: 'Gudang', icon: '📦', akses: 'gudang' },
   { id: 'pegawai', label: 'Pegawai', icon: '👥', adminOnly: true },
-  { id: 'kelompok', label: 'Kelompok Kerja', icon: '👥' },
-  { id: 'aktivitas', label: 'Pekerjaan Lapangan', icon: '📝' },
+  { id: 'kelompok', label: 'Kelompok Kerja', pegawaiLabel: 'Tugas Saya', icon: '👥' },
+  { id: 'aktivitas', label: 'Pekerjaan Lapangan', pegawaiLabel: 'Laporan Kegiatan', icon: '📝' },
   { id: 'absensi', label: 'Absensi', icon: '🕒' },
   { id: 'laporan', label: 'Laporan', icon: '📊', adminOnly: true },
   { id: 'kalender', label: 'Kalender', icon: '📅' },
   { id: 'notifikasi', label: 'Notifikasi', icon: '🔔', adminOnly: true },
-  { id: 'profil', label: 'Profil Saya', icon: '👤' },
+  { id: 'profil', label: 'Profil Saya', pegawaiLabel: 'Profil', icon: '👤' },
   { id: 'admins', label: 'Manajemen Admin', icon: '🛡️', adminOnly: true }
 ];
+
+const NAV_GROUPS = {
+  admin: [
+    { label: 'Kepegawaian', ids: ['pegawai', 'absensi'] },
+    { label: 'Operasional', ids: ['kelompok', 'aktivitas', 'kalender'] },
+    { label: 'Pertanian', ids: ['lahan', 'tanaman', 'penanaman', 'panen'] },
+    { label: 'Persediaan', ids: ['pupuk'] },
+    { label: 'Laporan', ids: ['laporan'] },
+    { label: 'Notifikasi', ids: ['notifikasi'] },
+    { label: 'Pengaturan', ids: ['profil', 'admins'] }
+  ],
+  pegawai: [
+    { label: 'Kegiatan Pertanian', ids: ['tanaman', 'penanaman', 'panen', 'aktivitas'] }
+  ]
+};
 
 function menuVisible(m) {
   const u = me();
   if (!u) return false;
   if (u.tipe === 'admin') return true;
   if (m.adminOnly) return false;
-  if (m.id === 'penanaman' || m.id === 'panen') return true; // Modul kerja lapangan tersedia untuk semua pegawai.
-  if (m.id === 'pupuk') return true; // Pegawai dapat melihat halaman Gudang.
-  return !m.akses || u.akses.includes(m.akses);
+  return !m.akses || (Array.isArray(u.akses) && u.akses.includes(m.akses));
+}
+
+function menuLabel(m) {
+  return me()?.tipe === 'pegawai' && m.pegawaiLabel ? m.pegawaiLabel : m.label;
+}
+
+function renderNavLink(m, r) {
+  return `<a href="#${m.id}" class="nav-link${m.id === r ? ' active' : ''}"${m.id === r ? ' aria-current="page"' : ''}><span class="nav-icon">${m.icon}</span><span>${menuLabel(m)}</span></a>`;
 }
 
 function renderNav(r) {
-  $('#nav').innerHTML = MENU.filter(menuVisible)
-    .map(m => `<a href="#${m.id}" class="${m.id === r ? 'active' : ''}"><span>${m.icon}</span>${m.label}</a>`)
-    .join('');
+  const visible = MENU.filter(menuVisible);
+  const byId = id => visible.find(m => m.id === id);
+  const used = new Set(['dashboard']);
+  const groups = NAV_GROUPS[me()?.tipe] || [];
+  let html = renderNavLink(byId('dashboard'), r);
+
+  groups.forEach(group => {
+    const items = group.ids.map(byId).filter(Boolean);
+    if (!items.length) return;
+    items.forEach(item => used.add(item.id));
+    const active = items.some(item => item.id === r);
+    html += `<details class="nav-group"${active ? ' open' : ''}><summary><span>${group.label}</span><span class="nav-chevron" aria-hidden="true">⌄</span></summary><div class="nav-submenu">${items.map(item => renderNavLink(item, r)).join('')}</div></details>`;
+  });
+
+  visible.filter(m => !used.has(m.id)).forEach(m => { html += renderNavLink(m, r); });
+  $('#nav').innerHTML = html;
 }
 
 /* ===== Notifikasi (khusus admin) ===== */
@@ -1899,7 +1933,7 @@ function render() {
     page = PAGES[r]();
   } catch (error) {
     console.error('Gagal merender halaman ' + r + ':', error);
-    if (r === 'gudang') {
+    if (r === 'pupuk') {
       page = { html: head('Gudang') + '<div class="card"><h3>Gudang gagal dimuat</h3><p>Pesan kesalahan: ' + esc(error?.message || error) + '</p><p class="muted">Kirimkan pesan ini agar penyebabnya bisa diperbaiki tanpa mengubah data stok.</p></div>' };
     } else {
       throw error;
@@ -1908,7 +1942,7 @@ function render() {
   $('#content').innerHTML = page.html;
   if (page.after) page.after();
 
-  $('#page-title').textContent = MENU.find(x => x.id === r).label;
+  $('#page-title').textContent = menuLabel(MENU.find(x => x.id === r));
   $('#user-name').textContent = `${u.nama} · ${u.tipe === 'admin' ? 'Admin' : 'Pegawai'}`;
   renderNav(r);
 
