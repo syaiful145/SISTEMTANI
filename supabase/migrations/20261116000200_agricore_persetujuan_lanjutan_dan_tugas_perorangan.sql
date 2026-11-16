@@ -47,6 +47,30 @@ CREATE POLICY tugas_anggota_read ON public.tugas_kelompok
   );
 
 -- Perbaiki hak pegawai menulis catatan: tugas bisa milik kelompok atau perorangan.
+DROP POLICY IF EXISTS aktivitas_anggota_read ON public.aktivitas_tugas;
+CREATE POLICY aktivitas_anggota_read ON public.aktivitas_tugas
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.pegawai pg
+      WHERE pg.id = aktivitas_tugas.pegawai_id
+        AND pg.auth_user_id = auth.uid()
+        AND pg.status_verifikasi = 'disetujui'
+    )
+    AND EXISTS (
+      SELECT 1 FROM public.tugas_kelompok tk
+      WHERE tk.id = aktivitas_tugas.tugas_id
+        AND (
+          tk.pegawai_id = aktivitas_tugas.pegawai_id
+          OR (tk.kelompok_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM public.anggota_kelompok ak
+            WHERE ak.kelompok_id = tk.kelompok_id
+              AND ak.pegawai_id = aktivitas_tugas.pegawai_id
+          ))
+        )
+    )
+  );
+
 DROP POLICY IF EXISTS aktivitas_anggota_insert ON public.aktivitas_tugas;
 CREATE POLICY aktivitas_anggota_insert ON public.aktivitas_tugas
   FOR INSERT TO authenticated
@@ -123,5 +147,46 @@ AFTER UPDATE OF pulang_at ON public.absensi
 FOR EACH ROW
 WHEN (NEW.pulang_at IS NOT NULL AND OLD.pulang_at IS NULL)
 EXECUTE FUNCTION public.agricore_tandai_tugas_menunggu_lanjutan();
+
+-- Izinkan pegawai perorangan maupun anggota kelompok mengajukan tugas selesai.
+CREATE OR REPLACE FUNCTION public.pegawai_ajukan_selesai_tugas_kelompok(p_tugas_id bigint)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Silakan masuk kembali.';
+  END IF;
+
+  UPDATE public.tugas_kelompok tk
+  SET status = 'menunggu_verifikasi', updated_at = now()
+  WHERE tk.id = p_tugas_id
+    AND tk.status = 'berjalan'
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.pegawai pg
+        WHERE tk.pegawai_id = pg.id
+          AND pg.auth_user_id = auth.uid()
+          AND pg.status_verifikasi = 'disetujui'
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.anggota_kelompok ak
+        JOIN public.pegawai pg ON pg.id = ak.pegawai_id
+        WHERE ak.kelompok_id = tk.kelompok_id
+          AND pg.auth_user_id = auth.uid()
+          AND pg.status_verifikasi = 'disetujui'
+      )
+    );
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Tugas tidak ditemukan, bukan tugas Anda, atau statusnya bukan Berjalan.';
+  END IF;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.pegawai_ajukan_selesai_tugas_kelompok(bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.pegawai_ajukan_selesai_tugas_kelompok(bigint) TO authenticated;
 
 -- Pastikan hanya admin yang dapat mengubah status tugas dan memberi persetujuan.
