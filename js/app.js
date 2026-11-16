@@ -1763,7 +1763,7 @@ async function verifikasiTugas(tugasId,status){
   catch(e){alert('Gagal memverifikasi tugas: '+e.message);}
 }
 
-\nconst PAGES = {
+const PAGES = {
   dashboard: pageDashboard,
   lahan: () => ({ html: crud('lahan', cfgLahan()) }),
   tanaman: () => ({ html: crud('tanaman', cfgTanaman()) }),
